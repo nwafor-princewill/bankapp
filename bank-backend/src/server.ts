@@ -28,6 +28,8 @@ const app = express();
 // app.use(cors());
 // With this:
 const allowedOrigins = [
+  'https://www.amalgamateed.com', // Your production domain
+  'https://amalgamateed.com', // Without www
   'https://bank-dis.vercel.app', // Your frontend URL
   'http://localhost:3000' // For local development
 ];

@@ -1,6 +1,4 @@
 "use strict";
-// import { Request, Response, NextFunction } from 'express';
-// import User from '../models/User';
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };

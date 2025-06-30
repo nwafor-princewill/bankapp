@@ -8,7 +8,7 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const accountSchema = new mongoose_1.default.Schema({
     accountNumber: { type: String, required: true },
     accountName: { type: String, required: true },
-    balance: { type: Number, default: 0.00 },
+    balance: { type: Number, default: 0 },
     currency: { type: String, default: 'USD' },
     openedAt: { type: Date, default: Date.now }
 });
