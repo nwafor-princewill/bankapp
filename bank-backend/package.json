@@ -1,12 +1,16 @@
+
 {
   "name": "bank-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "setup-admin": "ts-node src/scripts/setupAdmin.ts",
+    "setup-admin-prod": "node dist/scripts/setupAdmin.js",
+    "postbuild": "npm run setup-admin-prod"
   },
   "keywords": [],
   "author": "",
