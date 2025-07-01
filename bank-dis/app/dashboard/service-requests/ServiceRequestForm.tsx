@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const requestTypes = [
   'Account Inquiry',
   'Card Issue',
@@ -23,7 +25,7 @@ export default function ServiceRequestForm() {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/service-requests', {
+      const response = await fetch(`${API_URL}/api/service-requests`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

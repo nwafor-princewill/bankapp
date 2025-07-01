@@ -17,6 +17,8 @@ interface Transaction {
   createdAt: string;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const TransactionHistory = ({ accountNumber }: { accountNumber: string }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +52,7 @@ const TransactionHistory = ({ accountNumber }: { accountNumber: string }) => {
       });
 
       const response = await fetch(
-        `https://bank-backend-eagz.onrender.com/api/transactions?${queryParams}`,
+        `${API_URL}/api/transactions?${queryParams}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,

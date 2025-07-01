@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { FiX } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface ApplicationFormProps {
   product: {
     _id: string;
@@ -28,7 +30,7 @@ export default function ApplicationForm({ product, onClose }: ApplicationFormPro
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/loans/apply', {
+      const response = await fetch(`${API_URL}/api/loans/apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

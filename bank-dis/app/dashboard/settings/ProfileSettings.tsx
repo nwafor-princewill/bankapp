@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { FiUser, FiSave, FiEdit } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface UserProfile {
   firstName: string;
   lastName: string;
@@ -26,7 +28,7 @@ export default function ProfileSettings() {
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/settings/profile', {
+      const response = await fetch(`${API_URL}/api/settings/profile`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -42,7 +44,7 @@ export default function ProfileSettings() {
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/settings/profile', {
+      const response = await fetch(`${API_URL}/api/settings/profile`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

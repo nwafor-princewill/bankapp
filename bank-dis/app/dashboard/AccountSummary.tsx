@@ -16,6 +16,8 @@ interface AccountSummaryProps {
   accountNumber: string;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const AccountSummary: React.FC<AccountSummaryProps> = ({ accountNumber }) => {
   const [summary, setSummary] = useState<AccountSummaryData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ const AccountSummary: React.FC<AccountSummaryProps> = ({ accountNumber }) => {
         }
 
         const response = await fetch(
-          `https://bank-backend-eagz.onrender.com/api/accounts/summary?accountNumber=${encodeURIComponent(accountNumber)}`,
+          `${API_URL}/api/accounts/summary?accountNumber=${encodeURIComponent(accountNumber)}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`,

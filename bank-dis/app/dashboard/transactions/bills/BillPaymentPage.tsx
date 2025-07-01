@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface Biller {
   id: string;
   name: string;
@@ -34,14 +36,14 @@ export default function BillPaymentPage() {
       try {
         const token = localStorage.getItem('token');
         // Fetch accounts
-        const accountsRes = await fetch('https://bank-backend-eagz.onrender.com/api/accounts', {
+        const accountsRes = await fetch(`${API_URL}/api/accounts`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const accountsData = await accountsRes.json();
         if (accountsRes.ok) setAccounts(accountsData.accounts);
 
         // Fetch billers
-        const billersRes = await fetch('https://bank-backend-eagz.onrender.com/api/billers', {
+        const billersRes = await fetch(`${API_URL}/api/billers`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const billersData = await billersRes.json();
@@ -58,7 +60,7 @@ export default function BillPaymentPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/bill-payments', {
+      const response = await fetch(`${API_URL}/api/bill-payments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -10,6 +10,8 @@ interface AuthModalsProps {
   defaultTab?: 'login' | 'signup';
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const AuthModals: React.FC<AuthModalsProps> = ({ 
   showLogin, 
   showSignup, 
@@ -51,7 +53,7 @@ const AuthModals: React.FC<AuthModalsProps> = ({
     e.preventDefault();
     setError('');
     try {
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,7 +84,7 @@ const AuthModals: React.FC<AuthModalsProps> = ({
     e.preventDefault();
     setError('');
     try {
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/auth/register', {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

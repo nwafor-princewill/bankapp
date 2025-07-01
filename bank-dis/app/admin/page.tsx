@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { FiUsers, FiDollarSign, FiCreditCard, FiSettings } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -37,7 +39,7 @@ export default function AdminDashboard() {
       }
 
       // Try to access admin stats to verify admin access
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/admin/stats', {
+      const response = await fetch(`${API_URL}/api/admin/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -74,10 +76,10 @@ export default function AdminDashboard() {
       console.log('Fetching admin data with token:', token ? 'Token exists' : 'No token');
       
       const [statsRes, usersRes] = await Promise.all([
-        fetch('https://bank-backend-eagz.onrender.com/api/admin/stats', {
+        fetch(`${API_URL}/api/admin/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('https://bank-backend-eagz.onrender.com/api/admin/users', {
+        fetch(`${API_URL}/api/admin/users`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -119,7 +121,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/admin/credit', {
+      const response = await fetch(`${API_URL}/api/admin/credit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +158,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/admin/update-btc', {
+      const response = await fetch(`${API_URL}/api/admin/update-btc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

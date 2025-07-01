@@ -2,6 +2,8 @@
 
 import { NextResponse, NextRequest } from 'next/server';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export async function GET(request: NextRequest) { // Use NextRequest to access headers
   try {
     // **FIX:** Get the Authorization header from the INCOMING request
@@ -12,7 +14,7 @@ export async function GET(request: NextRequest) { // Use NextRequest to access h
     }
     
     // **FIX:** Forward the header to the backend
-    const response = await fetch('https://bank-backend-eagz.onrender.com/api/crypto/summary', {
+    const response = await fetch('${API_URL}/api/crypto/summary', {
       headers: {
         'Authorization': authHeader, // Pass the header along
         'Content-Type': 'application/json'

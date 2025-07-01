@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const requestTypes = [
   'Account Freeze',
   'Account Unfreeze',
@@ -23,7 +25,7 @@ export default function MaintenanceForm() {
     const fetchAccounts = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('https://bank-backend-eagz.onrender.com/api/accounts', {
+        const res = await fetch(`${API_URL}/api/accounts`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -41,7 +43,7 @@ export default function MaintenanceForm() {
     
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('https://bank-backend-eagz.onrender.com/api/account-maintenance', {
+      const res = await fetch(`${API_URL}/api/account-maintenance`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

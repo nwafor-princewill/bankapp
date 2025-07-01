@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { FiCreditCard, FiLock, FiEye, FiEyeOff, FiRefreshCw, FiAlertTriangle } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface Card {
   cardId: string;
   lastFour: string;
@@ -19,7 +21,7 @@ export default function CardPage() {
   const fetchCards = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/cards', {
+      const response = await fetch(`${API_URL}/api/cards`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -36,7 +38,7 @@ export default function CardPage() {
       const token = localStorage.getItem('token');
       
       if (action === 'lock') {
-        const response = await fetch(`https://bank-backend-eagz.onrender.com/api/cards/${cardId}/lock`, {
+        const response = await fetch(`${API_URL}/api/cards/${cardId}/lock`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });

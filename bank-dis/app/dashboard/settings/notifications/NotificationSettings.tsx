@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { FiMail, FiBell, FiAlertCircle, FiSave } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface NotificationPrefs {
   accountActivity: boolean;
   promotions: boolean;
@@ -22,7 +24,7 @@ export default function NotificationSettings() {
   const fetchSettings = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/settings/notifications', {
+      const response = await fetch(`${API_URL}/api/settings/notifications`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -39,7 +41,7 @@ export default function NotificationSettings() {
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/settings/notifications', {
+      const response = await fetch(`${API_URL}/api/settings/notifications`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

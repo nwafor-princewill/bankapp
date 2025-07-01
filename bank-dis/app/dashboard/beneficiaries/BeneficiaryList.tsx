@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { FiTrash2, FiEdit, FiPlus } from 'react-icons/fi';
 import AddBeneficiaryForm from './AddBeneficiaryForm';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface Beneficiary {
   _id: string;
   name: string;
@@ -21,7 +23,7 @@ export default function BeneficiaryList() {
   const fetchBeneficiaries = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/beneficiaries', {
+      const response = await fetch(`${API_URL}/api/beneficiaries`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -36,7 +38,7 @@ export default function BeneficiaryList() {
   const deleteBeneficiary = async (id: string) => {
     try {
       const token = localStorage.getItem('token');
-      await fetch(`https://bank-backend-eagz.onrender.com/api/beneficiaries/${id}`, {
+      await fetch(`${API_URL}/api/beneficiaries/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface Account {
   accountNumber: string;
   balance: number;
@@ -25,7 +27,7 @@ export default function TransferPage() {
     const fetchAccounts = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('https://bank-backend-eagz.onrender.com/api/accounts', {
+        const response = await fetch(`${API_URL}/api/accounts`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -46,7 +48,7 @@ export default function TransferPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/transfers', {
+      const response = await fetch(`${API_URL}/api/transfers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

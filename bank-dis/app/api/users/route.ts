@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export async function GET() {
   try {
-    const response = await fetch('https://bank-backend-eagz.onrender.com/api/users', {
+    const response = await fetch(`${API_URL}/api/users`, {
       headers: {
-        'Content-Type': 'application/json'
+      'Content-Type': 'application/json'
       }
     });
     

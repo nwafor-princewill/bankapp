@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 type FormData = {
   currentPassword: string;
   newPassword: string;
@@ -31,7 +33,7 @@ export default function SecurityForm() {
         ? '/api/settings/security/password' 
         : '/api/settings/security/question';
 
-      const response = await fetch(`https://bank-backend-eagz.onrender.com${endpoint}`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import ProductCard from './ProductCard';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface Product {
   _id: string;
   name: string;
@@ -23,7 +25,7 @@ export default function LoansInvestmentsPage() {
     const fetchProducts = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('https://bank-backend-eagz.onrender.com/api/loans', {
+        const response = await fetch(`${API_URL}/api/loans`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();

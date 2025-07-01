@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { FiGift, FiDollarSign, FiCheckCircle } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const rewards = [
   { id: 'gift50', name: '$50 Gift Card', points: 500 },
   { id: 'cash20', name: '$20 Cash Credit', points: 250 },
@@ -17,7 +19,7 @@ export default function RedeemPage() {
   const fetchBalance = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/redeem/balance', {
+      const response = await fetch(`${API_URL}/api/redeem/balance`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -33,7 +35,7 @@ export default function RedeemPage() {
     setRedeeming(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/redeem', {
+      const response = await fetch(`${API_URL}/api/redeem`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

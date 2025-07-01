@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { FaBitcoin, FaCopy, FaTrash } from 'react-icons/fa';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface Wallet {
   _id: string;
   walletAddress: string;
@@ -19,7 +21,7 @@ const WalletList = () => {
     const fetchWallets = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('https://bank-backend-eagz.onrender.com/api/crypto/wallets', {
+        const response = await fetch(`${API_URL}/api/crypto/wallets`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -47,7 +49,7 @@ const WalletList = () => {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`https://bank-backend-eagz.onrender.com/api/crypto/wallets/${walletId}`, {
+      const response = await fetch(`${API_URL}/api/crypto/wallets/${walletId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

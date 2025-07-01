@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { FiX } from 'react-icons/fi';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 interface AddBeneficiaryFormProps {
   onClose: () => void;
   onSuccess: () => void;
@@ -24,7 +26,7 @@ export default function AddBeneficiaryForm({ onClose, onSuccess }: AddBeneficiar
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://bank-backend-eagz.onrender.com/api/beneficiaries', {
+      const response = await fetch(`${API_URL}/api/beneficiaries`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
