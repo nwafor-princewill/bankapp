@@ -1,6 +1,5 @@
 // bank-backend/src/scripts/setupAdmin.ts
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
 import User from '../models/User';
 import dotenv from 'dotenv';
 
@@ -24,31 +23,25 @@ const setupAdmin = async () => {
     const existingAdmin = await User.findOne({ email: adminEmail });
     
     if (existingAdmin) {
-      // Update existing user to be admin
-      existingAdmin.isAdmin = true;
-      await existingAdmin.save();
-      console.log(`Updated existing user ${adminEmail} to admin`);
-    } else {
-      // Create new admin user
-      // const hashedPassword = await bcrypt.hash(adminPassword, 10);
-      
-      const adminUser = new User({
-        firstName: 'Admin',
-        lastName: 'User',
-        email: adminEmail,
-        password: adminPassword,
-        isAdmin: true,
-        phoneNumber: '1234567890',
-        dateOfBirth: new Date('1990-01-01'),
-        address: 'Admin Address',
-        accounts: []
-      });
-
-      await adminUser.save();
-      console.log(`Created admin user: ${adminEmail}`);
+      // Delete the existing admin to recreate with proper password hashing
+      await User.deleteOne({ email: adminEmail });
+      console.log(`Deleted existing user ${adminEmail} to fix password hashing`);
     }
 
+    // Create new admin user - let the model's pre-save middleware handle password hashing
+    const adminUser = new User({
+      firstName: 'Admin',
+      lastName: 'User',
+      email: adminEmail,
+      password: adminPassword, // Raw password - model will hash it
+      isAdmin: true,
+      accounts: [] // No bank accounts for admin
+    });
+
+    await adminUser.save();
+    console.log(`Created admin user: ${adminEmail}`);
     console.log('Admin setup completed successfully');
+    
     process.exit(0);
   } catch (error) {
     console.error('Error setting up admin:', error);
