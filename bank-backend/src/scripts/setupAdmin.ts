@@ -30,13 +30,13 @@ const setupAdmin = async () => {
       console.log(`Updated existing user ${adminEmail} to admin`);
     } else {
       // Create new admin user
-      const hashedPassword = await bcrypt.hash(adminPassword, 10);
+      // const hashedPassword = await bcrypt.hash(adminPassword, 10);
       
       const adminUser = new User({
         firstName: 'Admin',
         lastName: 'User',
         email: adminEmail,
-        password: hashedPassword,
+        password: adminPassword,
         isAdmin: true,
         phoneNumber: '1234567890',
         dateOfBirth: new Date('1990-01-01'),
