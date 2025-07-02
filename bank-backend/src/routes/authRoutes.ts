@@ -43,7 +43,7 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
       accounts: [{
         accountNumber,
         accountName,
-        balance: 1000.00,
+        balance: 0.00,
         currency: 'USD',
       }]
     });
