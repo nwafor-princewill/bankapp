@@ -7,6 +7,7 @@ import { FaAngleDown, FaAngleUp } from "react-icons/fa";
 import { IoSearch } from "react-icons/io5";
 import { ImCancelCircle } from 'react-icons/im';
 import AuthModals from '../auth/AuthModals';
+import Link from 'next/link';
 
 const Navbar = () => {
   const [isMobile, setIsMobile] = useState(false);
@@ -17,24 +18,46 @@ const Navbar = () => {
 
   const menuItems = [
     {
-      title: 'Personal',
-      links: ['Banking', 'Loans', 'Credit Cards', 'Investments']
+    title: 'Personal',
+    links: [
+      { name: 'Banking', path: '/personal/banking' },
+      { name: 'Loans', path: '/personal/loans' },
+      { name: 'Credit Cards', path: '/personal/credit-cards' },
+      { name: 'Investments', path: '/personal/investments' }
+    ]
     },
     {
       title: 'Small Business',
-      links: ['Business Banking', 'Business Loans', 'Merchant Services']
+      links: [
+        { name: 'Business Banking', path: '/small-business/banking' },
+        { name: 'Business Loans', path: '/small-business/loans' },
+        { name: 'Merchant Services', path: '/small-business/merchant-services' }
+      ]
     },
     {
       title: 'Commercial',
-      links: ['Commercial Banking', 'Treasury Management', 'Commercial Lending']
+      links: [
+        { name: 'Commercial Banking', path: '/commercial/banking' },
+        { name: 'Treasury Management', path: '/commercial/treasury' },
+        { name: 'Commercial Lending', path: '/commercial/lending' }
+      ]
     },
     {
       title: 'Institutional Investing',
-      links: ['Wealth Management', 'Retirement Planning', 'Trust Services']
+      links: [
+        { name: 'Wealth Management', path: '/institutional/wealth' },
+        { name: 'Retirement Planning', path: '/institutional/retirement' },
+        { name: 'Trust Services', path: '/institutional/trust' }
+      ]
     },
     {
       title: 'About Us',
-      links: ['Our Story', 'Leadership', 'Careers', 'Community Impact']
+      links: [
+        { name: 'Our Story', path: '/about/story' },
+        { name: 'Leadership', path: '/about/leadership' },
+        { name: 'Careers', path: '/about/careers' },
+        { name: 'Community Impact', path: '/about/community' }
+      ]
     }
   ];
 
@@ -130,13 +153,13 @@ const Navbar = () => {
                       <div className='absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-100'>
                         <div className='py-1'>
                           {item.links.map((link, linkIndex) => (
-                            <a
+                            <Link
                               key={linkIndex}
-                              href="#"
+                              href={link.path}
                               className='block px-4 py-2 text-sm text-[#03305c] hover:bg-[#f5f5f5] hover:text-[#e8742c]'
                             >
-                              {link}
-                            </a>
+                              {link.name}
+                            </Link>
                           ))}
                         </div>
                       </div>
@@ -188,12 +211,12 @@ const Navbar = () => {
                   <ul className='pl-4 space-y-2 mt-2'>
                     {item.links.map((link, linkIndex) => (
                       <li key={linkIndex}>
-                        <a
-                          href="#"
+                        <Link
+                          href={link.path}
                           className='block py-1.5 text-[#03305c] hover:text-[#e8742c] text-sm'
                         >
-                          {link}
-                        </a>
+                          {link.name}
+                        </Link>
                       </li>
                     ))}
                   </ul>
