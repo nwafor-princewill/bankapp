@@ -3,7 +3,6 @@ import auth from '../middleware/auth';
 import User from '../models/User';
 import AccountSummary from '../models/AccountSummary';
 import BankTransaction, { TransactionType } from '../models/BankTransaction';
-import { updateAccountBalance } from '../services/accountService';
 
 const router = Router();
 
@@ -54,11 +53,11 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    // Create transaction record
-    const reference = `TRX-${Date.now()}`;
+    // Calculate new balance
     const newBalance = primaryAccount.balance - numericAmount;
     
-    const transaction = await BankTransaction.create({
+    // Create transaction record (without storing in unused variable)
+    await BankTransaction.create({
       userId,
       accountNumber: primaryAccount.accountNumber,
       amount: -numericAmount,
@@ -66,7 +65,7 @@ router.post('/', auth, async (req, res) => {
       description: description || `Transfer to ${toAccount}`,
       balanceAfter: newBalance,
       recipientAccount: toAccount,
-      reference,
+      reference: `TRX-${Date.now()}`,
       status: 'completed'
     });
 
