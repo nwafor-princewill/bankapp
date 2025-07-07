@@ -87,6 +87,13 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response) 
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+          // Check if user is blocked
+    if (user.status === 'blocked') {
+      return res.status(403).json({ 
+        message: 'Your account has been blocked. Please contact support.' 
+      });
+    }
+
         // Debug logging
     console.log('Stored hash:', user.password);
     console.log('Input password:', req.body.password);
@@ -109,7 +116,9 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response) 
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        accounts: user.accounts
+        accounts: user.accounts,
+        isAdmin: user.isAdmin,
+        status: user.status
       }
     });
   } catch (err) {

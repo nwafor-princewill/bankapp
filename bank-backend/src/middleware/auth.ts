@@ -21,6 +21,10 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
     if (!user) {
       return res.status(401).send({ error: 'Authentication failed. User not found.' });
     }
+
+      if (user.status === 'blocked') {
+      return res.status(403).json({ message: 'Your account has been blocked' });
+    }
     req.user = user; 
     
     next();
