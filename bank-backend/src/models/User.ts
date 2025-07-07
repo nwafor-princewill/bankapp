@@ -42,6 +42,7 @@ export interface IUser extends Document {
   cards: ICard[];
   rewardPoints: number;
   isAdmin: boolean;
+  status: 'active' | 'blocked'; // Add this line
   notificationPreferences?: INotificationPreferences; 
   matchPassword(enteredPassword: string): Promise<boolean>;
 }
@@ -91,6 +92,11 @@ const userSchema = new mongoose.Schema<IUser>({
   cards: [cardSchema],
   rewardPoints: { type: Number, default: 1000, min: 0 },
   isAdmin: { type: Boolean, required: true, default: false },
+  status: { 
+    type: String, 
+    enum: ['active', 'blocked'],
+    default: 'active'
+  }, // Add this field
   notificationPreferences: { type: notificationPreferencesSchema, default: () => ({}) }
 }, {
   timestamps: true

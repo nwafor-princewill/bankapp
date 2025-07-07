@@ -81,7 +81,7 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields: userEmail, accountNumber, amount' });
     }
 
-      const numericAmount = parseFloat(amount);
+     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount)) {
       return res.status(400).json({ message: 'Invalid amount' });
     }
@@ -199,6 +199,46 @@ router.post('/update-btc', auth, isAdmin, async (req, res) => {
   } catch (err) {
     console.error('Admin BTC update error:', err);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// In bank-backend/src/routes/adminRoutes.ts
+router.post('/block-user', auth, isAdmin, async (req, res) => {
+  try {
+    const { userId, block } = req.body; // block is boolean
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'User ID is required' 
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { status: block ? 'blocked' : 'active' },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `User ${block ? 'blocked' : 'unblocked'} successfully`,
+      user
+    });
+
+  } catch (err) {
+    console.error('Block user error:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to update user status' 
+    });
   }
 });
 
