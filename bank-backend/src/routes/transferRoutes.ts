@@ -1,17 +1,19 @@
 import { Router } from 'express';
 import auth from '../middleware/auth';
-import BankTransaction, { TransactionType } from '../models/BankTransaction';
+import User from '../models/User';
 import AccountSummary from '../models/AccountSummary';
+import BankTransaction, { TransactionType } from '../models/BankTransaction';
 import { updateAccountBalance } from '../services/accountService';
 
 const router = Router();
 
 router.post('/', auth, async (req, res) => {
   try {
-    const { fromAccount, toAccount, amount, description } = req.body;
+    const { bankName, toAccount, amount, description } = req.body;
+    const userId = req.user?.id;
 
-    // Validation
-    if (!fromAccount || !toAccount || !amount) {
+    // Validate input
+    if (!bankName || !toAccount || !amount) {
       return res.status(400).json({ 
         success: false,
         message: 'Missing required fields' 
@@ -19,75 +21,78 @@ router.post('/', auth, async (req, res) => {
     }
 
     const numericAmount = parseFloat(amount);
-    if (isNaN(numericAmount)) {
+    if (isNaN(numericAmount) || numericAmount <= 0) {
       return res.status(400).json({ 
         success: false,
         message: 'Invalid amount' 
       });
     }
 
-    // Check if sender has sufficient balance
-    const senderAccount = await AccountSummary.findOne({ 
-      accountNumber: fromAccount,
-      userId: req.user?.id
-    });
+    // Get user's primary account
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
 
-    if (!senderAccount || senderAccount.availableBalance < numericAmount) {
+    if (!user.accounts || user.accounts.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'No account found for this user' 
+      });
+    }
+
+    const primaryAccount = user.accounts[0]; // Using first account as primary
+
+    // Check balance
+    if (primaryAccount.balance < numericAmount) {
       return res.status(400).json({ 
         success: false,
         message: 'Insufficient funds' 
       });
     }
 
-    // Create transaction records
+    // Create transaction record
     const reference = `TRX-${Date.now()}`;
+    const newBalance = primaryAccount.balance - numericAmount;
     
-    // Outbound transaction (from sender)
-    const outboundTx = await BankTransaction.create({
-      userId: req.user?.id,
-      accountNumber: fromAccount,
+    const transaction = await BankTransaction.create({
+      userId,
+      accountNumber: primaryAccount.accountNumber,
       amount: -numericAmount,
-            // **FIXED:** Use the enum member
       type: TransactionType.TRANSFER,
-    //   type: 'transfer',
-      description,
+      description: description || `Transfer to ${toAccount}`,
+      balanceAfter: newBalance,
       recipientAccount: toAccount,
-      balanceAfter: senderAccount.currentBalance - numericAmount,
       reference,
       status: 'completed'
     });
 
-    // Update sender's balance
-    await updateAccountBalance(
-      req.user?.id,
-      fromAccount,
-      -numericAmount,
-        // **FIXED:** Use the enum member here as well
-      TransactionType.TRANSFER
-    //   'transfer'
+    // Update user account balance
+    primaryAccount.balance = newBalance;
+    await user.save();
+
+    // Update AccountSummary
+    await AccountSummary.findOneAndUpdate(
+      { userId, accountNumber: primaryAccount.accountNumber },
+      {
+        $inc: { 
+          currentBalance: -numericAmount,
+          availableBalance: -numericAmount,
+          'monthlyStats.totalWithdrawals': numericAmount,
+          'monthlyStats.netChange': -numericAmount
+        },
+        $set: { lastTransactionDate: new Date() }
+      },
+      { upsert: true, new: true }
     );
-
-    // Inbound transaction (to recipient)
-    const inboundTx = await BankTransaction.create({
-      userId: req.user?.id, // In real app, this would be recipient's user ID
-      accountNumber: toAccount,
-      amount: numericAmount,
-      // **FIXED:** Use the enum member for deposit
-      type: TransactionType.DEPOSIT,
-    //   type: 'deposit',
-      description: `Transfer from ${fromAccount}`,
-      balanceAfter: 0, // Would be calculated in real app
-      reference,
-      status: 'completed'
-    });
-
-    // Update recipient's balance (in real app)
-    // await updateAccountBalance(recipientUserId, toAccount, numericAmount, 'deposit');
 
     res.json({
       success: true,
       message: 'Transfer successful',
-      transaction: outboundTx
+      newBalance
     });
 
   } catch (err) {

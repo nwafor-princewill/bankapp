@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 // bank-backend/src/scripts/setupAdmin.ts
 const mongoose_1 = __importDefault(require("mongoose"));
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const User_1 = __importDefault(require("../models/User"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
@@ -23,28 +22,21 @@ const setupAdmin = async () => {
         // Check if admin already exists
         const existingAdmin = await User_1.default.findOne({ email: adminEmail });
         if (existingAdmin) {
-            // Update existing user to be admin
-            existingAdmin.isAdmin = true;
-            await existingAdmin.save();
-            console.log(`Updated existing user ${adminEmail} to admin`);
+            // Delete the existing admin to recreate with proper password hashing
+            await User_1.default.deleteOne({ email: adminEmail });
+            console.log(`Deleted existing user ${adminEmail} to fix password hashing`);
         }
-        else {
-            // Create new admin user
-            const hashedPassword = await bcryptjs_1.default.hash(adminPassword, 10);
-            const adminUser = new User_1.default({
-                firstName: 'Admin',
-                lastName: 'User',
-                email: adminEmail,
-                password: hashedPassword,
-                isAdmin: true,
-                phoneNumber: '1234567890',
-                dateOfBirth: new Date('1990-01-01'),
-                address: 'Admin Address',
-                accounts: []
-            });
-            await adminUser.save();
-            console.log(`Created admin user: ${adminEmail}`);
-        }
+        // Create new admin user - let the model's pre-save middleware handle password hashing
+        const adminUser = new User_1.default({
+            firstName: 'Admin',
+            lastName: 'User',
+            email: adminEmail,
+            password: adminPassword,
+            isAdmin: true,
+            accounts: [] // No bank accounts for admin
+        });
+        await adminUser.save();
+        console.log(`Created admin user: ${adminEmail}`);
         console.log('Admin setup completed successfully');
         process.exit(0);
     }

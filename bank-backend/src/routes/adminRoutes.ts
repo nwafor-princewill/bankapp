@@ -81,6 +81,11 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields: userEmail, accountNumber, amount' });
     }
 
+      const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount)) {
+      return res.status(400).json({ message: 'Invalid amount' });
+    }
+
     // Find user by email
     const user = await User.findOne({ email: userEmail });
     if (!user) {
@@ -103,26 +108,69 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
     );
 
     // Also update AccountSummary if it exists
-    try {
-      await AccountSummary.findOneAndUpdate(
-        { userId: user._id, accountNumber: accountNumber },
-        { 
-          $inc: { currentBalance: Number(amount) },
-          $set: { lastUpdated: new Date() }
-        }
-      );
-    } catch (summaryErr) {
-      console.log('AccountSummary update failed (might not exist):', summaryErr);
-    }
+//     try {
+//       await AccountSummary.findOneAndUpdate(
+//         { userId: user._id, accountNumber: accountNumber },
+//         { 
+//           $inc: { currentBalance: Number(amount) },
+//           $set: { lastUpdated: new Date() }
+//         }
+//       );
+//     } catch (summaryErr) {
+//       console.log('AccountSummary update failed (might not exist):', summaryErr);
+//     }
 
-    console.log(`Successfully credited $${amount} to ${userEmail}'s account ${accountNumber}`);
+//     console.log(`Successfully credited $${amount} to ${userEmail}'s account ${accountNumber}`);
+//     res.json({ 
+//       success: true, 
+//       message: `Successfully credited $${amount} to ${userEmail}'s account ${accountNumber}` 
+//     });
+//   } catch (err) {
+//     console.error('Admin credit error:', err);
+//     res.status(500).json({ message: 'Server error: ' + (err instanceof Error ? err.message : String(err)) });
+//   }
+// });
+
+    const updatedSummary = await AccountSummary.findOneAndUpdate(
+      { userId: user._id, accountNumber: accountNumber },
+      { 
+        $inc: { 
+          currentBalance: numericAmount,
+          availableBalance: numericAmount,
+          'monthlyStats.totalDeposits': numericAmount,
+          'monthlyStats.netChange': numericAmount
+        },
+        $set: { 
+          lastTransactionDate: new Date(),
+          updatedAt: new Date()
+        }
+      },
+      { new: true, upsert: true }
+    );
+
+    // Create transaction record
+    const BankTransaction = require('../models/BankTransaction').default;
+    await BankTransaction.create({
+      userId: user._id,
+      accountNumber: accountNumber,
+      amount: numericAmount,
+      type: 'deposit',
+      description: description || 'Admin credit',
+      balanceAfter: updatedSummary.currentBalance,
+      reference: `ADMIN-CREDIT-${Date.now()}`,
+      status: 'completed'
+    });
+
     res.json({ 
       success: true, 
-      message: `Successfully credited $${amount} to ${userEmail}'s account ${accountNumber}` 
+      message: `Successfully credited $${numericAmount.toFixed(2)} to account ${accountNumber}`,
+      newBalance: updatedSummary.currentBalance
     });
   } catch (err) {
     console.error('Admin credit error:', err);
-    res.status(500).json({ message: 'Server error: ' + (err instanceof Error ? err.message : String(err)) });
+    res.status(500).json({ 
+      message: 'Server error: ' + (err instanceof Error ? err.message : String(err)) 
+    });
   }
 });
 

@@ -29,6 +29,8 @@ const app = (0, express_1.default)();
 // app.use(cors());
 // With this:
 const allowedOrigins = [
+    'https://www.amalgamateed.com',
+    'https://amalgamateed.com',
     'https://bank-dis.vercel.app',
     'http://localhost:3000' // For local development
 ];

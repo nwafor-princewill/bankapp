@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import auth from '../middleware/auth';
 import { getAccountSummary } from '../services/accountService';
+import User from '../models/User';
 
 const router = Router();
 
@@ -38,6 +39,35 @@ router.get('/summary', auth, async (req, res) => {
         ? err instanceof Error ? err.message : 'Server error'
         : 'Server error',
       data: null
+    });
+  }
+});
+
+// Add this to bank-backend/src/routes/accountRoutes.ts
+router.get('/primary', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user?.id).select('accounts');
+    if (!user || !user.accounts || user.accounts.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found'
+      });
+    }
+
+    const primaryAccount = user.accounts[0];
+    
+    res.json({
+      success: true,
+      accountNumber: primaryAccount.accountNumber,
+      balance: primaryAccount.balance,
+      currency: primaryAccount.currency || 'USD'
+    });
+    
+  } catch (err) {
+    console.error('Primary account error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch account details'
     });
   }
 });
