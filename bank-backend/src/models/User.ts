@@ -29,14 +29,12 @@ export interface ICard {
   status: 'active' | 'locked' | 'lost';
 }
 
-// **FIX 1:** Define the shape of the notification preferences
 export interface INotificationPreferences {
   accountActivity: boolean;
   promotions: boolean;
   securityAlerts: boolean;
 }
 
-// Define SecurityQuestion type
 export interface SecurityQuestion {
   question: string;
   answer: string;
@@ -59,21 +57,28 @@ export interface IUser extends Document {
   cards: ICard[];
   rewardPoints: number;
   isAdmin: boolean;
-  status: 'active' | 'blocked'; // Add this line
+  status: 'active' | 'blocked';
   notificationPreferences?: INotificationPreferences; 
   matchPassword(enteredPassword: string): Promise<boolean>;
 }
 
 const securityQuestionSchema = new mongoose.Schema<SecurityQuestion>({
-  question: { type: String, required: true },
-  answer: { type: String, required: true }
+  question: { 
+    type: String, 
+    required: [true, 'Security question is required'],
+    trim: true
+  },
+  answer: { 
+    type: String, 
+    required: [true, 'Security answer is required'],
+    trim: true
+  }
 }, { _id: false });
 
 const accountSchema = new mongoose.Schema<IAccount>({
   accountNumber: { type: String, required: true },
   accountName: { type: String, required: true },
   balance: { type: Number, default: 0 },
-  // currency: { type: String, default: 'USD' },
   currency: { 
     type: String, 
     enum: CURRENCIES,
@@ -103,12 +108,11 @@ const cardSchema = new mongoose.Schema<ICard>({
   }
 });
 
-// **FIX 3:** Define the schema for the notification preferences
 const notificationPreferencesSchema = new mongoose.Schema<INotificationPreferences>({
   accountActivity: { type: Boolean, default: true },
   promotions: { type: Boolean, default: false },
   securityAlerts: { type: Boolean, default: true }
-}, { _id: false }); // Use _id: false as it's a subdocument
+}, { _id: false });
 
 const userSchema = new mongoose.Schema<IUser>({
   firstName: { type: String, required: true },
@@ -125,24 +129,16 @@ const userSchema = new mongoose.Schema<IUser>({
   state: { type: String, required: true },
   address: { type: String, required: true },
   phone: { type: String, required: true },
-  // securityQuestions: {
-  //   type: [securityQuestionSchema],
-  //   required: true,
-  //   validate: {
-  //     validator: (questions: SecurityQuestion[]) => questions.length >= 1,
-  //     message: 'At least one security question is required'
-  //   }
-  // },
-
-    securityQuestions: {
+  securityQuestions: {
     type: [securityQuestionSchema],
     required: true,
     validate: {
       validator: function(questions: SecurityQuestion[]) {
-        return questions.length >= 1 && 
-              questions.every(q => q.question && q.answer);
+        return questions && 
+               questions.length >= 1 && 
+               questions.every(q => q && q.question && q.question.trim() && q.answer && q.answer.trim());
       },
-      message: 'At least one complete security question (with both question and answer) is required'
+      message: 'At least one complete security question is required'
     }
   },
   accounts: [accountSchema],
@@ -154,7 +150,7 @@ const userSchema = new mongoose.Schema<IUser>({
     type: String, 
     enum: ['active', 'blocked'],
     default: 'active'
-  }, // Add this field
+  },
   notificationPreferences: { type: notificationPreferencesSchema, default: () => ({}) }
 }, {
   timestamps: true
@@ -163,11 +159,12 @@ const userSchema = new mongoose.Schema<IUser>({
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
   
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+  next();
 });
 
 // Method to compare passwords
