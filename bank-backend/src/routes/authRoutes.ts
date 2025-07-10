@@ -34,48 +34,101 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
   const { firstName, lastName, email, password, confirmPassword, gender, dateOfBirth, country, state, address, phone, securityQuestions, currency } = req.body;
 
   try {
-    // Validate required fields
-    if (!email || !password || !confirmPassword) {
-      return res.status(400).json({ message: 'Email and password are required' });
+    // Enhanced validation for all required fields
+    const requiredFields = {
+      firstName: 'First name',
+      lastName: 'Last name', 
+      email: 'Email',
+      password: 'Password',
+      confirmPassword: 'Confirm password',
+      gender: 'Gender',
+      dateOfBirth: 'Date of birth',
+      country: 'Country',
+      state: 'State',
+      address: 'Address',
+      phone: 'Phone number'
+    };
+
+    // Check for missing required fields
+    const missingFields = [];
+    for (const [field, displayName] of Object.entries(requiredFields)) {
+      if (!(req.body as any)[field] || (typeof (req.body as any)[field] === 'string' && (req.body as any)[field].trim() === '')) {
+        missingFields.push(displayName);
+      }
     }
 
+    if (missingFields.length > 0) {
+      return res.status(400).json({ 
+        message: `The following fields are required: ${missingFields.join(', ')}` 
+      });
+    }
+
+    // Password validation
     if (password !== confirmPassword) {
       return res.status(400).json({ message: 'Passwords do not match' });
     }
 
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    // Currency validation
     if (!CURRENCIES.includes(currency as any)) {
       return res.status(400).json({ message: 'Invalid currency selection' });
     }
 
-    if (!req.body.securityQuestions || 
-        req.body.securityQuestions.length < 1 || 
-        !req.body.securityQuestions[0].question || 
-        !req.body.securityQuestions[0].answer) {
+    // Security questions validation
+    if (!securityQuestions || 
+        !Array.isArray(securityQuestions) ||
+        securityQuestions.length < 1 || 
+        !securityQuestions[0]?.question?.trim() || 
+        !securityQuestions[0]?.answer?.trim()) {
       return res.status(400).json({ 
-        message: 'At least one security question with answer is required' 
+        message: 'At least one complete security question with answer is required' 
       });
     }
+
+    // Check for duplicate security questions
+    const duplicateQuestions = securityQuestions.filter((q, index) => 
+      q.question && securityQuestions.findIndex(item => item.question === q.question) !== index
+    );
     
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ message: 'User already exists' });
+    if (duplicateQuestions.length > 0) {
+      return res.status(400).json({ message: 'Please select different security questions' });
     }
 
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+    
+    // Check if user already exists
+    let user = await User.findOne({ email: email.toLowerCase() });
+    if (user) {
+      return res.status(400).json({ message: 'User already exists with this email' });
+    }
+
+    // Generate account details
     const accountNumber = generateAccountNumber();
     const accountName = generateAccountName(firstName, lastName);
 
+    // Create new user
     user = new User({
-      firstName,
-      lastName,
-      email,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.toLowerCase().trim(),
       password,
       gender,
       dateOfBirth: new Date(dateOfBirth),
-      country,
-      state,
-      address,
-      phone,
-      securityQuestions,
+      country: country.trim(),
+      state: state.trim(),
+      address: address.trim(),
+      phone: phone.trim(),
+      securityQuestions: securityQuestions.map(q => ({
+        question: q.question.trim(),
+        answer: q.answer.trim()
+      })),
       accounts: [{
         accountNumber,
         accountName,
@@ -86,7 +139,7 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
 
     await user.save();
 
-        // Verify JWT_SECRET exists
+    // Verify JWT_SECRET exists
     if (!process.env.JWT_SECRET) {
       throw new Error('JWT_SECRET not configured');
     }
@@ -108,8 +161,23 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    console.error('Registration error:', err);
+    
+    // Type guard for error object
+    if (err && typeof err === 'object') {
+      // Handle mongoose validation errors
+      if ((err as any).name === 'ValidationError') {
+        const errors = Object.values((err as any).errors).map((error: any) => error.message);
+        return res.status(400).json({ message: errors.join(', ') });
+      }
+      
+      // Handle duplicate key errors
+      if ((err as any).code === 11000) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+    }
+    
+    res.status(500).json({ message: 'Server error during registration' });
   }
 });
 
@@ -118,21 +186,25 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response) 
   const { email, password } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    // Input validation
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-          // Check if user is blocked
+    // Check if user is blocked
     if (user.status === 'blocked') {
       return res.status(403).json({ 
         message: 'Your account has been blocked. Please contact support.' 
       });
     }
 
-        // Debug logging
-    console.log('Stored hash:', user.password);
-    console.log('Input password:', req.body.password);
+    // Debug logging (remove in production)
+    console.log('Login attempt for:', email);
 
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
@@ -158,13 +230,12 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response) 
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Server error during login' });
   }
 });
 
-
-// Add to your authRoutes.ts
+// @route   GET /api/auth/me
 router.get('/me', async (req: Request, res: Response) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -181,7 +252,8 @@ router.get('/me', async (req: Request, res: Response) => {
 
     res.json({ user });
   } catch (err) {
-    res.status(500).send('Server error');
+    console.error('Auth verification error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
