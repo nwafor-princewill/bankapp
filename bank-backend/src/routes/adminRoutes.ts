@@ -1,4 +1,3 @@
-// bank-backend/src/routes/adminRoutes.ts
 import { Router } from 'express';
 import auth from '../middleware/auth';
 import { isAdmin } from '../middleware/isAdmin';
@@ -6,6 +5,7 @@ import User from '../models/User';
 import AccountSummary from '../models/AccountSummary';
 import { updateAccountBalance } from '../services/accountService';
 import { TransactionType } from '../models/BankTransaction';
+import BankTransaction from '../models/BankTransaction';
 
 const router = Router();
 
@@ -33,8 +33,6 @@ const getBtcAddress = async () => {
 // Admin stats
 router.get('/stats', auth, isAdmin, async (req, res) => {
   try {
-    console.log('Admin stats route hit');
-    
     const users = await User.countDocuments();
     const activeUsers = await User.countDocuments();
     const totalBalance = await AccountSummary.aggregate([
@@ -43,15 +41,12 @@ router.get('/stats', auth, isAdmin, async (req, res) => {
     
     const btcAddress = await getBtcAddress();
     
-    const response = {
+    res.json({
       users,
       activeUsers,
       totalBalance: totalBalance[0]?.total || 0,
       btcAddress
-    };
-    
-    console.log('Sending admin stats:', response);
-    res.json(response);
+    });
   } catch (err) {
     console.error('Admin stats error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -61,9 +56,7 @@ router.get('/stats', auth, isAdmin, async (req, res) => {
 // Get all users
 router.get('/users', auth, isAdmin, async (req, res) => {
   try {
-    console.log('Admin users route hit');
     const users = await User.find().select('-password');
-    console.log('Found users:', users.length);
     res.json(users);
   } catch (err) {
     console.error('Admin users error:', err);
@@ -71,34 +64,100 @@ router.get('/users', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Credit user account - FIXED VERSION
+// Get all transactions
+router.get('/transactions', auth, isAdmin, async (req, res) => {
+  try {
+    const transactions = await BankTransaction.find()
+      .sort({ createdAt: -1 })
+      .limit(100);
+    res.json(transactions);
+  } catch (err) {
+    console.error('Admin transactions error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Backdate transaction
+router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
+  try {
+    const { transactionId, newDate } = req.body;
+
+    if (!transactionId || !newDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction ID and new date are required'
+      });
+    }
+
+    const backdate = new Date(newDate);
+    if (backdate > new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot backdate to a future date'
+      });
+    }
+
+    const transaction = await BankTransaction.findById(transactionId);
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    if (!transaction.originalDate) {
+      transaction.originalDate = transaction.createdAt;
+    }
+
+    transaction.createdAt = backdate;
+    await transaction.save();
+
+    await AccountSummary.findOneAndUpdate(
+      { 
+        userId: transaction.userId,
+        accountNumber: transaction.accountNumber 
+      },
+      { $set: { lastTransactionDate: new Date() } }
+    );
+
+    res.json({
+      success: true,
+      message: 'Transaction date updated successfully',
+      transaction
+    });
+  } catch (err) {
+    console.error('Backdate transaction error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to backdate transaction'
+    });
+  }
+});
+
+// Credit user account
 router.post('/credit', auth, isAdmin, async (req, res) => {
   try {
-    console.log('Admin credit route hit with body:', req.body);
     const { userEmail, accountNumber, amount, description } = req.body;
     
     if (!userEmail || !accountNumber || !amount) {
       return res.status(400).json({ message: 'Missing required fields: userEmail, accountNumber, amount' });
     }
 
-     const numericAmount = parseFloat(amount);
+    const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount)) {
       return res.status(400).json({ message: 'Invalid amount' });
     }
 
-    // Find user by email
     const user = await User.findOne({ email: userEmail });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check if user has this account
     const userAccount = user.accounts.find(acc => acc.accountNumber === accountNumber);
     if (!userAccount) {
       return res.status(404).json({ message: 'Account not found for this user' });
     }
 
-    // Update the user's account balance directly
     await User.updateOne(
       { _id: user._id, 'accounts.accountNumber': accountNumber },
       { 
@@ -106,30 +165,6 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
         $set: { 'accounts.$.updatedAt': new Date() }
       }
     );
-
-    // Also update AccountSummary if it exists
-//     try {
-//       await AccountSummary.findOneAndUpdate(
-//         { userId: user._id, accountNumber: accountNumber },
-//         { 
-//           $inc: { currentBalance: Number(amount) },
-//           $set: { lastUpdated: new Date() }
-//         }
-//       );
-//     } catch (summaryErr) {
-//       console.log('AccountSummary update failed (might not exist):', summaryErr);
-//     }
-
-//     console.log(`Successfully credited $${amount} to ${userEmail}'s account ${accountNumber}`);
-//     res.json({ 
-//       success: true, 
-//       message: `Successfully credited $${amount} to ${userEmail}'s account ${accountNumber}` 
-//     });
-//   } catch (err) {
-//     console.error('Admin credit error:', err);
-//     res.status(500).json({ message: 'Server error: ' + (err instanceof Error ? err.message : String(err)) });
-//   }
-// });
 
     const updatedSummary = await AccountSummary.findOneAndUpdate(
       { userId: user._id, accountNumber: accountNumber },
@@ -148,8 +183,6 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
       { new: true, upsert: true }
     );
 
-    // Create transaction record
-    const BankTransaction = require('../models/BankTransaction').default;
     await BankTransaction.create({
       userId: user._id,
       accountNumber: accountNumber,
@@ -174,7 +207,7 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Update BTC address - DEPLOYMENT READY
+// Update BTC address
 router.post('/update-btc', auth, isAdmin, async (req, res) => {
   try {
     const { newAddress } = req.body;
@@ -183,7 +216,6 @@ router.post('/update-btc', auth, isAdmin, async (req, res) => {
       return res.status(400).json({ message: 'BTC address is required' });
     }
 
-    // Save to database for deployment
     await Config.findOneAndUpdate(
       { key: 'BTC_ADDRESS' },
       { 
@@ -194,7 +226,6 @@ router.post('/update-btc', auth, isAdmin, async (req, res) => {
       { upsert: true, new: true }
     );
     
-    console.log('BTC address updated to:', newAddress);
     res.json({ success: true, message: 'BTC address updated successfully' });
   } catch (err) {
     console.error('Admin BTC update error:', err);
@@ -202,10 +233,10 @@ router.post('/update-btc', auth, isAdmin, async (req, res) => {
   }
 });
 
-// In bank-backend/src/routes/adminRoutes.ts
+// Block/unblock user
 router.post('/block-user', auth, isAdmin, async (req, res) => {
   try {
-    const { userId, block } = req.body; // block is boolean
+    const { userId, block } = req.body;
     
     if (!userId) {
       return res.status(400).json({ 
@@ -232,7 +263,6 @@ router.post('/block-user', auth, isAdmin, async (req, res) => {
       message: `User ${block ? 'blocked' : 'unblocked'} successfully`,
       user
     });
-
   } catch (err) {
     console.error('Block user error:', err);
     res.status(500).json({ 

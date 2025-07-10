@@ -17,6 +17,9 @@ interface IBankTransaction extends Document {
   recipientAccount?: string;
   reference: string;
   status: 'pending' | 'completed' | 'failed';
+  createdAt: Date;
+  updatedAt: Date;
+  originalDate?: Date;
 }
 
 const BankTransactionSchema = new mongoose.Schema<IBankTransaction>({
@@ -36,15 +39,15 @@ const BankTransactionSchema = new mongoose.Schema<IBankTransaction>({
     type: String, 
     enum: ['pending', 'completed', 'failed'],
     default: 'completed' 
-  }
+  },
+  originalDate: { type: Date }
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true } 
 });
 
-// Indexes for faster queries
 BankTransactionSchema.index({ userId: 1, createdAt: -1 });
-BankTransactionSchema.index({ accountNumber: 1 });
+BankTransactionSchema.index({ accountNumber: 1, createdAt: -1 });
 
 export default mongoose.model<IBankTransaction>('BankTransaction', BankTransactionSchema);
