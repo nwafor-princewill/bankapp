@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
+import User, { CURRENCIES } from '../models/User';
 import { generateAccountNumber, generateAccountName } from '../utils/accountUtils';
 
 const router = Router();
@@ -10,6 +10,18 @@ interface RegisterRequest {
   lastName: string;
   email: string;
   password: string;
+  confirmPassword: string;
+  gender: string;
+  dateOfBirth: string;
+  country: string;
+  state: string;
+  address: string;
+  phone: string;
+  securityQuestions: Array<{
+    question: string;
+    answer: string;
+  }>;
+  currency: string;
 }
 
 interface LoginRequest {
@@ -19,14 +31,21 @@ interface LoginRequest {
 
 // @route   POST /api/auth/register
 router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
-  const { firstName, lastName, email, password } = req.body;
+  const { firstName, lastName, email, password, confirmPassword, gender, dateOfBirth, country, state, address, phone, securityQuestions, currency } = req.body;
 
   try {
-        // Add validation
-    if (!req.body.email || !req.body.password) {
+    // Validate required fields
+    if (!email || !password || !confirmPassword) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    if (!CURRENCIES.includes(currency as any)) {
+      return res.status(400).json({ message: 'Invalid currency selection' });
+    }
     let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
@@ -40,11 +59,18 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
       lastName,
       email,
       password,
+      gender,
+      dateOfBirth: new Date(dateOfBirth),
+      country,
+      state,
+      address,
+      phone,
+      securityQuestions,
       accounts: [{
         accountNumber,
         accountName,
         balance: 0.00,
-        currency: 'USD',
+        currency: currency as typeof CURRENCIES[number],
       }]
     });
 

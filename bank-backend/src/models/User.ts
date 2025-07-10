@@ -1,11 +1,15 @@
 import mongoose, { Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// Add currency enum
+export const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY'] as const;
+export type Currency = typeof CURRENCIES[number];
+
 export interface IAccount {
   accountNumber: string;
   accountName: string;
   balance: number;
-  currency: string;
+  currency: Currency;
   openedAt: Date;
 }
 
@@ -32,11 +36,24 @@ export interface INotificationPreferences {
   securityAlerts: boolean;
 }
 
+// Define SecurityQuestion type
+export interface SecurityQuestion {
+  question: string;
+  answer: string;
+}
+
 export interface IUser extends Document {
   firstName: string;
   lastName: string;
   email: string;
   password: string;
+  gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
+  dateOfBirth: Date;
+  country: string;
+  state: string;
+  address: string;
+  phone: string;
+  securityQuestions: SecurityQuestion[];
   accounts: IAccount[];
   cryptoWallets: ICryptoWallet[];
   cards: ICard[];
@@ -47,11 +64,22 @@ export interface IUser extends Document {
   matchPassword(enteredPassword: string): Promise<boolean>;
 }
 
+const securityQuestionSchema = new mongoose.Schema<SecurityQuestion>({
+  question: { type: String, required: true },
+  answer: { type: String, required: true }
+}, { _id: false });
+
 const accountSchema = new mongoose.Schema<IAccount>({
   accountNumber: { type: String, required: true },
   accountName: { type: String, required: true },
   balance: { type: Number, default: 0 },
-  currency: { type: String, default: 'USD' },
+  // currency: { type: String, default: 'USD' },
+  currency: { 
+    type: String, 
+    enum: CURRENCIES,
+    default: 'USD',
+    required: true 
+  },
   openedAt: { type: Date, default: Date.now }
 });
 
@@ -87,6 +115,25 @@ const userSchema = new mongoose.Schema<IUser>({
   lastName: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other', 'prefer-not-to-say'],
+    required: true
+  },
+  dateOfBirth: { type: Date, required: true },
+  country: { type: String, required: true },
+  state: { type: String, required: true },
+  address: { type: String, required: true },
+  phone: { type: String, required: true },
+  securityQuestions: {
+    type: [securityQuestionSchema],
+    required: true,
+    validate: {
+      validator: (questions: SecurityQuestion[]) => questions.length >= 1,
+      message: 'At least one security question is required'
+    }
+  },
+  
   accounts: [accountSchema],
   cryptoWallets: [cryptoWalletSchema],
   cards: [cardSchema],
