@@ -78,11 +78,18 @@ router.get('/transactions', auth, isAdmin, async (req, res) => {
 });
 
 // Backdate transaction
+// Backdate transaction endpoint
 router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     const { transactionId, newDate } = req.body;
+    const adminId = req.user._id; // Assuming your auth middleware adds user to req
 
+    // Validate input
     if (!transactionId || !newDate) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Transaction ID and new date are required'
@@ -90,14 +97,91 @@ router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
     }
 
     const backdate = new Date(newDate);
+    if (isNaN(backdate.getTime())) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format'
+      });
+    }
+
     if (backdate > new Date()) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Cannot backdate to a future date'
       });
     }
 
-    const transaction = await BankTransaction.findById(transactionId);
+    // Find and validate transaction
+    const transaction = await BankTransaction.findById(transactionId).session(session);
+    if (!transaction) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    // Store original date if not already stored
+    if (!transaction.originalDate) {
+      transaction.originalDate = transaction.createdAt;
+    }
+
+    // Create a deep clone of the current transaction for history
+    const oldTransaction = transaction.toObject();
+
+    // Update the transaction date
+    transaction.createdAt = backdate;
+    transaction.lastModifiedBy = adminId;
+
+    // Save the transaction
+    await transaction.save({ session });
+
+    // Update account summary
+    await AccountSummary.findOneAndUpdate(
+      { 
+        userId: transaction.userId,
+        accountNumber: transaction.accountNumber 
+      },
+      { $set: { lastTransactionDate: new Date() } },
+      { session }
+    );
+
+    // Commit the transaction
+    await session.commitTransaction();
+
+    // Return success response with the updated transaction
+    res.json({
+      success: true,
+      message: 'Transaction date updated successfully',
+      transaction: {
+        ...transaction.toObject(),
+        previousDate: oldTransaction.createdAt
+      }
+    });
+
+  }  catch (err: unknown) {
+    await session.abortTransaction();
+    console.error('Backdate transaction error:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Failed to backdate transaction';
+    res.status(500).json({
+      success: false,
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    });
+}finally {
+    session.endSession();
+  }
+});
+
+// Add this endpoint to get modification history
+router.get('/transaction-history/:id', auth, isAdmin, async (req, res) => {
+  try {
+    const transaction = await BankTransaction.findById(req.params.id)
+      .select('modificationHistory reference accountNumber')
+      .populate('modificationHistory.changedBy', 'firstName lastName email');
+    
     if (!transaction) {
       return res.status(404).json({
         success: false,
@@ -105,31 +189,15 @@ router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
       });
     }
 
-    if (!transaction.originalDate) {
-      transaction.originalDate = transaction.createdAt;
-    }
-
-    transaction.createdAt = backdate;
-    await transaction.save();
-
-    await AccountSummary.findOneAndUpdate(
-      { 
-        userId: transaction.userId,
-        accountNumber: transaction.accountNumber 
-      },
-      { $set: { lastTransactionDate: new Date() } }
-    );
-
     res.json({
       success: true,
-      message: 'Transaction date updated successfully',
-      transaction
+      history: transaction.modificationHistory || []
     });
   } catch (err) {
-    console.error('Backdate transaction error:', err);
+    console.error('Transaction history error:', err);
     res.status(500).json({
       success: false,
-      message: 'Failed to backdate transaction'
+      message: 'Failed to fetch transaction history'
     });
   }
 });
