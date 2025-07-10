@@ -46,6 +46,16 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     if (!CURRENCIES.includes(currency as any)) {
       return res.status(400).json({ message: 'Invalid currency selection' });
     }
+
+    if (!req.body.securityQuestions || 
+        req.body.securityQuestions.length < 1 || 
+        !req.body.securityQuestions[0].question || 
+        !req.body.securityQuestions[0].answer) {
+      return res.status(400).json({ 
+        message: 'At least one security question with answer is required' 
+      });
+    }
+    
     let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });

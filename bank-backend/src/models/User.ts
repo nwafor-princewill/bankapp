@@ -125,15 +125,26 @@ const userSchema = new mongoose.Schema<IUser>({
   state: { type: String, required: true },
   address: { type: String, required: true },
   phone: { type: String, required: true },
-  securityQuestions: {
+  // securityQuestions: {
+  //   type: [securityQuestionSchema],
+  //   required: true,
+  //   validate: {
+  //     validator: (questions: SecurityQuestion[]) => questions.length >= 1,
+  //     message: 'At least one security question is required'
+  //   }
+  // },
+
+    securityQuestions: {
     type: [securityQuestionSchema],
     required: true,
     validate: {
-      validator: (questions: SecurityQuestion[]) => questions.length >= 1,
-      message: 'At least one security question is required'
+      validator: function(questions: SecurityQuestion[]) {
+        return questions.length >= 1 && 
+              questions.every(q => q.question && q.answer);
+      },
+      message: 'At least one complete security question (with both question and answer) is required'
     }
   },
-  
   accounts: [accountSchema],
   cryptoWallets: [cryptoWalletSchema],
   cards: [cardSchema],
