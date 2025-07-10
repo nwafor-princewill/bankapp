@@ -28,12 +28,24 @@ const setupAdmin = async () => {
       console.log(`Deleted existing user ${adminEmail} to fix password hashing`);
     }
 
-    // Create new admin user - let the model's pre-save middleware handle password hashing
+    // Create new admin user with all required fields
     const adminUser = new User({
       firstName: 'Admin',
       lastName: 'User',
       email: adminEmail,
       password: adminPassword, // Raw password - model will hash it
+      gender: 'prefer-not-to-say',
+      dateOfBirth: new Date('1990-01-01'), // Default admin birth date
+      country: 'System',
+      state: 'System',
+      address: 'System Admin Address',
+      phone: '+1234567890',
+      securityQuestions: [
+        {
+          question: "What is your system role?",
+          answer: "Administrator"
+        }
+      ],
       isAdmin: true,
       accounts: [] // No bank accounts for admin
     });
