@@ -53,7 +53,7 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     // Check for missing required fields
     const missingFields = [];
     for (const [field, displayName] of Object.entries(requiredFields)) {
-      if (!req.body[field] || (typeof req.body[field] === 'string' && req.body[field].trim() === '')) {
+      if (!(req.body as any)[field] || (typeof (req.body as any)[field] === 'string' && (req.body as any)[field].trim() === '')) {
         missingFields.push(displayName);
       }
     }
@@ -165,13 +165,13 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     console.error('Registration error:', err);
     
     // Handle mongoose validation errors
-    if (err.name === 'ValidationError') {
-      const errors = Object.values(err.errors).map((error: any) => error.message);
+    if (typeof err === 'object' && err !== null && 'name' in err && (err as any).name === 'ValidationError') {
+      const errors = Object.values((err as any).errors).map((error: any) => error.message);
       return res.status(400).json({ message: errors.join(', ') });
     }
     
     // Handle duplicate key errors
-    if (err.code === 11000) {
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as any).code === 11000) {
       return res.status(400).json({ message: 'Email already exists' });
     }
     
