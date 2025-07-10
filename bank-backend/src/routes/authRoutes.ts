@@ -40,19 +40,20 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
       lastName: 'Last name', 
       email: 'Email',
       password: 'Password',
-      confirmPassword: 'Confirm password',
+      confirmPassword: 'Confirm password', // ADD THIS LINE
       gender: 'Gender',
       dateOfBirth: 'Date of birth',
       country: 'Country',
       state: 'State',
       address: 'Address',
-      phone: 'Phone number'
+      phone: 'Phone number',
+      currency: 'Currency' // ADD THIS LINE TOO
     };
 
     // Check for missing required fields
     const missingFields = [];
     for (const [field, displayName] of Object.entries(requiredFields)) {
-      if (!(req.body as any)[field] || (typeof (req.body as any)[field] === 'string' && (req.body as any)[field].trim() === '')) {
+      if (!req.body[field] || (typeof req.body[field] === 'string' && req.body[field].trim() === '')) {
         missingFields.push(displayName);
       }
     }
@@ -163,18 +164,15 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
   } catch (err) {
     console.error('Registration error:', err);
     
-    // Type guard for error object
-    if (err && typeof err === 'object') {
-      // Handle mongoose validation errors
-      if ((err as any).name === 'ValidationError') {
-        const errors = Object.values((err as any).errors).map((error: any) => error.message);
-        return res.status(400).json({ message: errors.join(', ') });
-      }
-      
-      // Handle duplicate key errors
-      if ((err as any).code === 11000) {
-        return res.status(400).json({ message: 'Email already exists' });
-      }
+    // Handle mongoose validation errors
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map((error: any) => error.message);
+      return res.status(400).json({ message: errors.join(', ') });
+    }
+    
+    // Handle duplicate key errors
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Email already exists' });
     }
     
     res.status(500).json({ message: 'Server error during registration' });
