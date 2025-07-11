@@ -45,6 +45,7 @@ export interface IUser extends Document {
   lastName: string;
   email: string;
   password: string;
+  profilePicture?: string; // Add this line
   gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
   dateOfBirth: Date;
   country: string;
@@ -119,6 +120,7 @@ const userSchema = new mongoose.Schema<IUser>({
   lastName: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  profilePicture: { type: String }, // Add this line
   gender: {
     type: String,
     enum: ['male', 'female', 'other', 'prefer-not-to-say'],

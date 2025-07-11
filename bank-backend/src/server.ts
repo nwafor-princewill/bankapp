@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import connectDB from './db/connection';
 import authRoutes from './routes/authRoutes';
 import dotenv from 'dotenv';
@@ -19,24 +20,20 @@ import serviceRequestRoutes from './routes/serviceRequestRoutes';
 import accountMaintenanceRoutes from './routes/accountMaintenanceRoutes';
 import adminRoutes from './routes/adminRoutes';
 
-
 dotenv.config();
 
 const app = express();
 
-// Middleware
-// app.use(cors());
-// With this:
+// CORS Configuration
 const allowedOrigins = [
-  'https://www.amalgamateed.com', // Your production domain
-  'https://amalgamateed.com', // Without www
-  'https://bank-dis.vercel.app', // Your frontend URL
-  'http://localhost:3000' // For local development
+  'https://www.amalgamateed.com',
+  'https://amalgamateed.com',
+  'https://bank-dis.vercel.app',
+  'http://localhost:3000'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
@@ -49,7 +46,11 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
+// Middleware
 app.use(express.json());
+
+// Serve static files (profile pictures)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -66,23 +67,14 @@ app.use('/api/beneficiaries', beneficiaryRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/account-maintenance', accountMaintenanceRoutes);
-app.use('/api/admin', adminRoutes); // Make sure this line exists
+app.use('/api/admin', adminRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;
 
 connectDB().then(() => {
+  startBlockchainListener();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
 });
-
-// Add after DB connection
-connectDB().then(() => {
-  startBlockchainListener(); // Start the blockchain listener
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-});
-
-// Replace or complement your existing listener
