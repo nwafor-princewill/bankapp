@@ -19,6 +19,7 @@ const upload = multer({
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
+      // Pass an actual Error object to the callback
       cb(new Error('Only image files are allowed!'));
     }
   }
@@ -66,20 +67,17 @@ router.post('/:userId/profile-picture',
       
       const userId = req.params.userId;
       
-      // Check if user exists
       const user = await User.findById(userId);
       if (!user) {
         console.log('User not found:', userId);
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Check if user is updating their own profile
       if (req.user?._id.toString() !== userId && !req.user?.isAdmin) {
         console.log('Unauthorized access attempt');
         return res.status(403).json({ message: 'You can only update your own profile picture' });
       }
 
-      // Check if file was uploaded
       if (!req.file) {
         console.log('No file uploaded');
         return res.status(400).json({ message: 'No file uploaded' });
@@ -91,10 +89,10 @@ router.post('/:userId/profile-picture',
         size: req.file.size
       });
 
-      // Convert file to base64 for storage
       const profilePictureUrl = convertToBase64(req.file);
       
-      // Update user with base64 image
+      // I am assuming 'profilePicture' exists on your User model.
+      // If not, you'll need to add `profilePicture?: string;` to your IUser interface and schema.
       user.profilePicture = profilePictureUrl;
       await user.save();
 
@@ -107,9 +105,16 @@ router.post('/:userId/profile-picture',
 
     } catch (error) {
       console.error('Error uploading profile picture:', error);
+      
+      // **THE FIX:** We check if 'error' is an instance of Error before accessing '.message'.
+      let errorMessage = 'Internal server error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
       res.status(500).json({ 
         message: 'Server error during file upload',
-        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        error: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error'
       });
     }
   }
@@ -124,18 +129,15 @@ router.delete('/:userId/profile-picture',
     try {
       const userId = req.params.userId;
       
-      // Check if user exists
       const user = await User.findById(userId);
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Check if user is updating their own profile
       if (req.user?._id.toString() !== userId && !req.user?.isAdmin) {
         return res.status(403).json({ message: 'You can only delete your own profile picture' });
       }
 
-      // Remove profile picture from user record
       user.profilePicture = undefined;
       await user.save();
 
@@ -156,25 +158,21 @@ router.put('/:userId', auth, async (req: Request, res: Response) => {
     const userId = req.params.userId;
     const updates = req.body;
 
-    // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check if user is updating their own profile
     if (req.user?._id.toString() !== userId && !req.user?.isAdmin) {
       return res.status(403).json({ message: 'You can only update your own profile' });
     }
 
-    // Remove sensitive fields from updates
     delete updates.password;
     delete updates.isAdmin;
     delete updates.accounts;
     delete updates.cryptoWallets;
     delete updates.cards;
 
-    // Update user
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updates,
