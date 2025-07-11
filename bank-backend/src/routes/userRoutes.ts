@@ -3,47 +3,31 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import User from '../models/User';
-import auth from '../middleware/auth'; // Your existing auth middleware
+import auth from '../middleware/auth';
 
 const router = Router();
 
-// Create uploads directory if it doesn't exist
-const uploadDir = path.join(__dirname, '..', 'uploads', 'profile-pictures');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Use memory storage for production to avoid file system issues
+const storage = multer.memoryStorage();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: userId-timestamp.extension
-    const userId = req.params.userId || 'unknown';
-    const timestamp = Date.now();
-    const extension = path.extname(file.originalname);
-    cb(null, `${userId}-${timestamp}${extension}`);
-  }
-});
-
-// File filter to only allow images
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files are allowed!'));
-  }
-};
-
-// Configure multer
 const upload = multer({
   storage: storage,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
-  fileFilter: fileFilter
+  fileFilter: (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'));
+    }
+  }
 });
+
+// Helper function to convert file to base64
+const convertToBase64 = (file: Express.Multer.File): string => {
+  return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+};
 
 // @route   GET /api/users
 router.get('/', async (req: Request, res: Response) => {
@@ -78,59 +62,55 @@ router.post('/:userId/profile-picture',
   upload.single('profilePicture'), 
   async (req: Request, res: Response) => {
     try {
+      console.log('Profile picture upload started for user:', req.params.userId);
+      
       const userId = req.params.userId;
       
       // Check if user exists
       const user = await User.findById(userId);
       if (!user) {
+        console.log('User not found:', userId);
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Check if user is updating their own profile (optional security check)
+      // Check if user is updating their own profile
       if (req.user?._id.toString() !== userId && !req.user?.isAdmin) {
+        console.log('Unauthorized access attempt');
         return res.status(403).json({ message: 'You can only update your own profile picture' });
       }
 
       // Check if file was uploaded
       if (!req.file) {
+        console.log('No file uploaded');
         return res.status(400).json({ message: 'No file uploaded' });
       }
 
-      // Delete old profile picture if exists
-      if (user.profilePicture) {
-        const oldImagePath = path.join(__dirname, '..', user.profilePicture);
-        if (fs.existsSync(oldImagePath)) {
-          fs.unlinkSync(oldImagePath);
-        }
-      }
+      console.log('File details:', {
+        filename: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      });
 
-      // Update user with new profile picture path
-      const profilePicturePath = `uploads/profile-pictures/${req.file.filename}`;
-      user.profilePicture = profilePicturePath;
+      // Convert file to base64 for storage
+      const profilePictureUrl = convertToBase64(req.file);
+      
+      // Update user with base64 image
+      user.profilePicture = profilePictureUrl;
       await user.save();
 
-      // Return the full URL for the profile picture
-      const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-      const profilePictureUrl = `${baseUrl}/${profilePicturePath}`;
+      console.log('Profile picture updated successfully');
 
       res.json({
         message: 'Profile picture uploaded successfully',
-        profilePictureUrl: profilePictureUrl,
-        profilePicturePath: profilePicturePath
+        profilePictureUrl: profilePictureUrl
       });
 
     } catch (error) {
       console.error('Error uploading profile picture:', error);
-      
-      // Delete uploaded file if there was an error
-      if (req.file) {
-        const filePath = path.join(uploadDir, req.file.filename);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      }
-
-      res.status(500).json({ message: 'Server error during file upload' });
+      res.status(500).json({ 
+        message: 'Server error during file upload',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
   }
 );
@@ -153,14 +133,6 @@ router.delete('/:userId/profile-picture',
       // Check if user is updating their own profile
       if (req.user?._id.toString() !== userId && !req.user?.isAdmin) {
         return res.status(403).json({ message: 'You can only delete your own profile picture' });
-      }
-
-      // Delete the file if it exists
-      if (user.profilePicture) {
-        const imagePath = path.join(__dirname, '..', user.profilePicture);
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
-        }
       }
 
       // Remove profile picture from user record
