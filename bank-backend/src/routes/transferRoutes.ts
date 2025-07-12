@@ -43,7 +43,8 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    const primaryAccount = user.accounts[0]; // Using first account as primary
+    const primaryAccount = user.accounts[0];
+    const currency = primaryAccount.currency || 'USD';
 
     // Check balance
     if (primaryAccount.balance < numericAmount) {
@@ -56,7 +57,7 @@ router.post('/', auth, async (req, res) => {
     // Calculate new balance
     const newBalance = primaryAccount.balance - numericAmount;
     
-    // Create transaction record (without storing in unused variable)
+    // Create transaction record
     await BankTransaction.create({
       userId,
       accountNumber: primaryAccount.accountNumber,
@@ -66,7 +67,8 @@ router.post('/', auth, async (req, res) => {
       balanceAfter: newBalance,
       recipientAccount: toAccount,
       reference: `TRX-${Date.now()}`,
-      status: 'completed'
+      status: 'completed',
+      currency
     });
 
     // Update user account balance
@@ -83,7 +85,10 @@ router.post('/', auth, async (req, res) => {
           'monthlyStats.totalWithdrawals': numericAmount,
           'monthlyStats.netChange': -numericAmount
         },
-        $set: { lastTransactionDate: new Date() }
+        $set: { 
+          lastTransactionDate: new Date(),
+          currency
+        }
       },
       { upsert: true, new: true }
     );
@@ -91,7 +96,8 @@ router.post('/', auth, async (req, res) => {
     res.json({
       success: true,
       message: 'Transfer successful',
-      newBalance
+      newBalance,
+      currency
     });
 
   } catch (err) {

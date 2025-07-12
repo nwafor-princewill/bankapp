@@ -17,6 +17,7 @@ interface IBankTransaction extends Document {
   userId: mongoose.Types.ObjectId;
   accountNumber: string;
   amount: number;
+  currency: string; // Add this
   type: TransactionType;
   description: string;
   balanceAfter: number;
@@ -43,6 +44,10 @@ const BankTransactionSchema = new mongoose.Schema<IBankTransaction>({
   amount: { 
     type: Number, 
     required: true 
+  },
+  currency: { 
+    type: String,
+    default: 'USD'
   },
   type: { 
     type: String, 

@@ -11,7 +11,8 @@ export const createTransaction = async (
   description: string,
   balanceAfter: number,
   reference: string,
-  recipientAccount?: string
+  recipientAccount?: string,
+  currency: string = 'USD' // Add currency parameter
 ) => {
   return BankTransaction.create({
     userId,
@@ -22,7 +23,8 @@ export const createTransaction = async (
     balanceAfter,
     recipientAccount,
     reference,
-    status: 'completed'
+    status: 'completed',
+    currency // Add to creation
   });
 };
 

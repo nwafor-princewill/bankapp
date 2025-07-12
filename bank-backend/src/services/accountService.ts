@@ -39,7 +39,7 @@ export const getAccountSummary = async (userId: string, accountNumber: string) =
         },
         totalWithdrawals: {
           $sum: {
-            $cond: [{ $in: ['$type', ['withdrawal', 'payment']] }, '$amount', 0]
+            $cond: [{ $in: ['$type', ['withdrawal', 'payment', 'transfer']] }, { $abs: '$amount' }, 0]
           }
         }
       }
@@ -66,15 +66,22 @@ export const updateAccountBalance = async (
   amount: number,
   transactionType: TransactionType
 ) => {
+  const isTransferOrWithdrawal = 
+    transactionType === TransactionType.TRANSFER || 
+    transactionType === TransactionType.WITHDRAWAL ||
+    transactionType === TransactionType.PAYMENT;
+
   const update = {
     $inc: {
       currentBalance: amount,
       availableBalance: amount,
       ...(transactionType === 'deposit' && {
-        'monthlyStats.totalDeposits': amount
+        'monthlyStats.totalDeposits': amount,
+        'monthlyStats.netChange': amount
       }),
-      ...((transactionType === 'withdrawal' || transactionType === 'payment') && {
-        'monthlyStats.totalWithdrawals': amount
+      ...(isTransferOrWithdrawal && {
+        'monthlyStats.totalWithdrawals': Math.abs(amount),
+        'monthlyStats.netChange': -Math.abs(amount)
       })
     },
     $set: {
