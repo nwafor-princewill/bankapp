@@ -57,6 +57,8 @@ export interface IUser extends Document {
   cryptoWallets: ICryptoWallet[];
   cards: ICard[];
   rewardPoints: number;
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
   isAdmin: boolean;
   status: 'active' | 'blocked';
   notificationPreferences?: INotificationPreferences; 
@@ -147,6 +149,8 @@ const userSchema = new mongoose.Schema<IUser>({
   cryptoWallets: [cryptoWalletSchema],
   cards: [cardSchema],
   rewardPoints: { type: Number, default: 1000, min: 0 },
+  resetPasswordToken: { type: String },
+  resetPasswordExpires: { type: Date },
   isAdmin: { type: Boolean, required: true, default: false },
   status: { 
     type: String, 
