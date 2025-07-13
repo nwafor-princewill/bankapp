@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import User, { CURRENCIES } from '../models/User';
 import { generateAccountNumber, generateAccountName } from '../utils/accountUtils';
@@ -271,9 +272,15 @@ router.post('/forgot-password', async (req: Request<{}, {}, ForgotPasswordReques
     const resetToken = crypto.randomBytes(20).toString('hex');
     const resetTokenExpiry = Date.now() + 3600000; // 1 hour expiry
 
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = new Date(resetTokenExpiry);
-    await user.save();
+    // Update only the reset fields without triggering full validation
+    await User.findByIdAndUpdate(user._id, {
+      resetPasswordToken: resetToken,
+      resetPasswordExpires: new Date(resetTokenExpiry)
+    });
+
+    // user.resetPasswordToken = resetToken;
+    // user.resetPasswordExpires = new Date(resetTokenExpiry);
+    // await user.save();
 
     // Create reset URL
     const resetUrl = `${process.env.BASE_URL}/reset-password?token=${resetToken}`;
@@ -317,11 +324,24 @@ router.post('/reset-password', async (req: Request<{}, {}, ResetPasswordRequest>
       return res.status(400).json({ success: false, message: 'Invalid or expired token' });
     }
 
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
     // Update password and clear token
-    user.password = newPassword;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
-    await user.save();
+    // user.password = newPassword;
+    // user.resetPasswordToken = undefined;
+    // user.resetPasswordExpires = undefined;
+    // await user.save();
+
+      // Update password and clear token fields without full validation
+    await User.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      $unset: {
+        resetPasswordToken: 1,
+        resetPasswordExpires: 1
+      }
+    });
 
     // Send confirmation email
     const mailOptions = {
