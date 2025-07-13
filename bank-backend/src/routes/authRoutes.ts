@@ -356,7 +356,7 @@ router.post('/reset-password', async (req: Request<{}, {}, ResetPasswordRequest>
 
     await transporter.sendMail(mailOptions);
 
-    res.json({ success: true, message: 'Password updated successfully' });
+    res.json({ success: true, message: 'Password updated successfully', redirectTo: '/' });
   } catch (err) {
     console.error('Reset password error:', err);
     res.status(500).json({ success: false, message: 'Error resetting password' });
