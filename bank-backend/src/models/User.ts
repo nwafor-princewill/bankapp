@@ -2,7 +2,7 @@ import mongoose, { Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 // Add currency enum
-export const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY'] as const;
+export const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'KRW', 'BRL', 'MXN', 'SGD', 'HKD', 'SEK', 'NOK', 'ZAR', 'RUB', 'TRY', 'NGN'] as const;
 export type Currency = typeof CURRENCIES[number];
 
 export interface IAccount {
