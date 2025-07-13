@@ -91,10 +91,12 @@ router.post('/:userId/profile-picture',
 
       const profilePictureUrl = convertToBase64(req.file);
       
-      // I am assuming 'profilePicture' exists on your User model.
-      // If not, you'll need to add `profilePicture?: string;` to your IUser interface and schema.
-      user.profilePicture = profilePictureUrl;
-      await user.save();
+      // **THE FIX:** Use findByIdAndUpdate instead of user.save() to avoid triggering full validation
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { profilePicture: profilePictureUrl },
+        { new: true, runValidators: false } // Set runValidators to false to avoid full validation
+      );
 
       console.log('Profile picture updated successfully');
 
@@ -138,8 +140,12 @@ router.delete('/:userId/profile-picture',
         return res.status(403).json({ message: 'You can only delete your own profile picture' });
       }
 
-      user.profilePicture = undefined;
-      await user.save();
+      // **THE FIX:** Use findByIdAndUpdate instead of user.save() to avoid triggering full validation
+      await User.findByIdAndUpdate(
+        userId,
+        { $unset: { profilePicture: 1 } },
+        { runValidators: false } // Set runValidators to false to avoid full validation
+      );
 
       res.json({ message: 'Profile picture deleted successfully' });
 
