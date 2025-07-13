@@ -283,7 +283,10 @@ router.post('/forgot-password', async (req: Request<{}, {}, ForgotPasswordReques
     // await user.save();
 
     // Create reset URL
-    const resetUrl = `${process.env.BASE_URL}/reset-password?token=${resetToken}`;
+    // const resetUrl = `${process.env.BASE_URL}/reset-password?token=${resetToken}`;
+
+    // To this:
+    const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL}/reset-password?token=${resetToken}`;
 
     // Send email
     const mailOptions = {
