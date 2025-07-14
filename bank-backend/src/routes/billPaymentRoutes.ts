@@ -1,20 +1,22 @@
 import { Router } from 'express';
 import auth from '../middleware/auth';
-// **FIX 1:** Import the 'TransactionType' enum.
 import BankTransaction, { TransactionType } from '../models/BankTransaction';
 import AccountSummary from '../models/AccountSummary';
+import User from '../models/User';
 import { updateAccountBalance } from '../services/accountService';
+import { createTransaction } from '../services/transactionService';
 
 const router = Router();
 
-// Get available billers
+// Get available billers - now includes all billers from your frontend
 router.get('/billers', auth, async (req, res) => {
   try {
-    // In a real app, this would come from a database
     const billers = [
-      { id: 'elec-1', name: 'Electric Company', category: 'Utilities', accountNumber: 'ELEC12345' },
-      { id: 'water-1', name: 'Water Works', category: 'Utilities', accountNumber: 'WATER67890' },
-      { id: 'internet-1', name: 'Internet Provider', category: 'Services', accountNumber: 'NET45678' }
+      { id: '1', name: 'Electricity Company', category: 'Utilities', accountNumber: 'ELEC-12345' },
+      { id: '2', name: 'Water Corporation', category: 'Utilities', accountNumber: 'WATER-67890' },
+      { id: '3', name: 'Internet Provider', category: 'Telecom', accountNumber: 'NET-54321' },
+      { id: '4', name: 'Cable TV', category: 'Entertainment', accountNumber: 'TV-98765' },
+      { id: '5', name: 'Mobile Carrier', category: 'Telecom', accountNumber: 'MOBILE-13579' }
     ];
     
     res.json(billers);
@@ -30,6 +32,7 @@ router.get('/billers', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { fromAccount, billerId, amount, paymentDate, reference } = req.body;
+    const userId = req.user?.id;
 
     // Validation
     if (!fromAccount || !billerId || !amount) {
@@ -47,13 +50,25 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    // Check account balance
-    const account = await AccountSummary.findOne({ 
-      accountNumber: fromAccount,
-      userId: req.user?.id
-    });
+    // Get user and account
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
 
-    if (!account || account.availableBalance < numericAmount) {
+    const account = user.accounts.find(acc => acc.accountNumber === fromAccount);
+    if (!account) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Account not found' 
+      });
+    }
+
+    // Check account balance
+    if (account.balance < numericAmount) {
       return res.status(400).json({ 
         success: false,
         message: 'Insufficient funds' 
@@ -61,31 +76,35 @@ router.post('/', auth, async (req, res) => {
     }
 
     // Create transaction record
-    const transaction = await BankTransaction.create({
-      userId: req.user?.id,
-      accountNumber: fromAccount,
-      amount: -numericAmount,
-      // **FIX 2:** Use the enum member 'TransactionType.PAYMENT'.
-      type: TransactionType.PAYMENT,
-      description: `Bill payment to ${billerId}`,
-      balanceAfter: account.currentBalance - numericAmount,
+    const transaction = await createTransaction(
+      userId,
+      fromAccount,
+      -numericAmount,
+      TransactionType.PAYMENT,
+      `Bill payment to ${billerId}`,
+      account.balance - numericAmount,
       reference,
-      status: 'completed'
-    });
+      undefined,
+      account.currency
+    );
 
     // Update account balance
     await updateAccountBalance(
-      req.user?.id,
+      userId,
       fromAccount,
       -numericAmount,
-      // **FIX 3:** Use the enum member here as well.
       TransactionType.PAYMENT
     );
+
+    // Update user's account balance
+    account.balance -= numericAmount;
+    await user.save();
 
     res.json({
       success: true,
       message: 'Payment processed',
-      transaction
+      transaction,
+      newBalance: account.balance
     });
 
   } catch (err) {
