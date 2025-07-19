@@ -340,4 +340,56 @@ router.post('/block-user', auth, isAdmin, async (req, res) => {
   }
 });
 
+// Delete user permanently
+router.delete('/delete-user/:userId', auth, isAdmin, async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      await session.abortTransaction();
+      return res.status(400).json({ 
+        success: false,
+        message: 'User ID is required' 
+      });
+    }
+
+    // Delete user's transactions first
+    await BankTransaction.deleteMany({ userId }).session(session);
+    
+    // Delete user's account summaries
+    await AccountSummary.deleteMany({ userId }).session(session);
+    
+    // Finally delete the user
+    const deletedUser = await User.findByIdAndDelete(userId).session(session);
+    
+    if (!deletedUser) {
+      await session.abortTransaction();
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+
+    await session.commitTransaction();
+    
+    res.json({
+      success: true,
+      message: 'User deleted permanently',
+      deletedUserId: userId
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('Delete user error:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to delete user' 
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
 export default router;
