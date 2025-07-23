@@ -112,4 +112,39 @@ router.get('/summary', auth, async (req, res) => {
   }
 });
 
+// src/routes/accountRoutes.ts
+router.get('/check', auth, async (req, res) => {
+  try {
+    const { accountNumber } = req.query;
+    
+    const user = await User.findOne({ 
+      'accounts.accountNumber': accountNumber 
+    }, {
+      'accounts.$': 1,
+      firstName: 1,
+      lastName: 1
+    });
+
+    if (!user) {
+      return res.json({
+        success: true,
+        exists: false
+      });
+    }
+
+    res.json({
+      success: true,
+      exists: true,
+      accountName: `${user.firstName} ${user.lastName}`,
+      account: user.accounts[0]
+    });
+  } catch (err) {
+    console.error('Error checking account:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error' 
+    });
+  }
+});
+
 export default router;

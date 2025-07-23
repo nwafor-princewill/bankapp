@@ -178,4 +178,7 @@ userSchema.methods.matchPassword = async function(enteredPassword: string) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
+// Add this right before the export default line
+userSchema.index({ 'accounts.accountNumber': 1 }, { unique: true });
+
 export default mongoose.model<IUser>('User', userSchema);

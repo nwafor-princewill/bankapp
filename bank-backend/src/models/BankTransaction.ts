@@ -7,6 +7,13 @@ export enum TransactionType {
   PAYMENT = 'payment'
 }
 
+// Enum for transfer types
+export enum TransferType {
+  INTERNAL = 'internal',
+  DOMESTIC = 'domestic',
+  INTERNATIONAL = 'international'
+}
+
 interface ModificationHistoryItem {
   date: Date;
   changedBy: mongoose.Types.ObjectId;
@@ -19,6 +26,8 @@ interface IBankTransaction extends Document {
   amount: number;
   currency: string; // Add this
   type: TransactionType;
+  transferType?: TransferType; // Add this line
+  recipientDetails?: RecipientDetails; // Optional field
   description: string;
   balanceAfter: number;
   recipientAccount?: string;
@@ -29,6 +38,16 @@ interface IBankTransaction extends Document {
   originalDate?: Date;
   lastModifiedBy?: mongoose.Types.ObjectId;
   modificationHistory?: ModificationHistoryItem[];
+}
+
+// Add to your existing IBankTransaction interface
+interface RecipientDetails {
+  accountName?: string;
+  bankName?: string;
+  bankAddress?: string;
+  swiftIban?: string;
+  email?: string;
+  phone?: string;
 }
 
 const BankTransactionSchema = new mongoose.Schema<IBankTransaction>({
@@ -54,6 +73,27 @@ const BankTransactionSchema = new mongoose.Schema<IBankTransaction>({
     enum: Object.values(TransactionType),
     required: true 
   },
+  // Add transferType field
+
+  transferType: {
+    type: String,
+    enum: Object.values(TransferType),
+    required: false
+  },
+
+  recipientDetails: {
+    type: {
+      accountName: String,
+      bankName: String,
+      bankAddress: String,
+      swiftIban: String,
+      email: String,
+      phone: String
+    },
+    required: false,
+    _id: false // Prevent automatic ID generation for subdocuments
+  },
+  
   description: { 
     type: String, 
     required: true 

@@ -2,21 +2,43 @@ import { Router } from 'express';
 import auth from '../middleware/auth';
 import User from '../models/User';
 import AccountSummary from '../models/AccountSummary';
-import BankTransaction, { TransactionType } from '../models/BankTransaction';
+import BankTransaction, { TransactionType, TransferType } from '../models/BankTransaction';
 
 const router = Router();
 
 router.post('/', auth, async (req, res) => {
   try {
-    const { bankName, toAccount, amount, description } = req.body;
+    const { 
+      bankName, 
+      toAccount, 
+      amount, 
+      description,
+      transferType = 'domestic', // Default to domestic if not specified
+      // International transfer fields
+      accountName,
+      bankAddress,
+      swiftIban,
+      email,
+      phone
+    } = req.body;
     const userId = req.user?.id;
 
-    // Validate input
-    if (!bankName || !toAccount || !amount) {
+    // Validate input based on transfer type
+    if (!toAccount || !amount) {
       return res.status(400).json({ 
         success: false,
-        message: 'Missing required fields' 
+        message: 'Account number and amount are required' 
       });
+    }
+
+    // Additional validation for international transfers
+    if (transferType === 'international') {
+      if (!accountName || !bankName || !swiftIban) {
+        return res.status(400).json({
+          success: false,
+          message: 'For international transfers, account name, bank name, and SWIFT/IBAN are required'
+        });
+      }
     }
 
     const numericAmount = parseFloat(amount);
@@ -54,21 +76,47 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
+    // For internal transfers, verify recipient account exists
+    if (transferType === 'internal') {
+      const recipient = await User.findOne({ 'accounts.accountNumber': toAccount });
+      if (!recipient) {
+        return res.status(400).json({
+          success: false,
+          message: 'Recipient account not found in our bank'
+        });
+      }
+    }
+
     // Calculate new balance
     const newBalance = primaryAccount.balance - numericAmount;
     
-    // Create transaction record
+    // Create transaction record with transfer type
     await BankTransaction.create({
       userId,
       accountNumber: primaryAccount.accountNumber,
       amount: -numericAmount,
       type: TransactionType.TRANSFER,
-      description: description || `Transfer to ${toAccount}`,
+      transferType, // This is where we use the transferType
+      description: description || 
+        (transferType === 'international' 
+          ? `International transfer to ${accountName}` 
+          : `Transfer to ${toAccount}`),
       balanceAfter: newBalance,
       recipientAccount: toAccount,
       reference: `TRX-${Date.now()}`,
       status: 'completed',
-      currency
+      currency,
+      // Additional fields for international transfers
+      ...(transferType === 'international' && {
+        recipientDetails: {
+          accountName,
+          bankName,
+          bankAddress,
+          swiftIban,
+          email,
+          phone
+        }
+      })
     });
 
     // Update user account balance
@@ -97,7 +145,8 @@ router.post('/', auth, async (req, res) => {
       success: true,
       message: 'Transfer successful',
       newBalance,
-      currency
+      currency,
+      transferType
     });
 
   } catch (err) {
