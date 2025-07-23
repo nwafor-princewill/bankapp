@@ -113,36 +113,55 @@ router.get('/summary', auth, async (req, res) => {
 });
 
 // src/routes/accountRoutes.ts
+// Update ONLY the /check endpoint in your existing accountRoutes.ts
 router.get('/check', auth, async (req, res) => {
   try {
     const { accountNumber } = req.query;
-    
-    const user = await User.findOne({ 
-      'accounts.accountNumber': accountNumber 
-    }, {
-      'accounts.$': 1,
-      firstName: 1,
-      lastName: 1
-    });
+
+    // Enhanced validation
+    if (!accountNumber || typeof accountNumber !== 'string' || accountNumber.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid account number (min 8 chars) is required'
+      });
+    }
+
+    // More efficient query using projection
+    const user = await User.findOne(
+      { 
+        'accounts.accountNumber': accountNumber,
+        status: 'active' // Only check active accounts
+      },
+      {
+        'accounts.$': 1,  // Only return matching account
+        firstName: 1,
+        lastName: 1,
+        status: 1
+      }
+    );
 
     if (!user) {
       return res.json({
         success: true,
-        exists: false
+        exists: false,
+        message: 'Account not found'
       });
     }
 
+    // Return consistent response format
     res.json({
       success: true,
       exists: true,
       accountName: `${user.firstName} ${user.lastName}`,
-      account: user.accounts[0]
+      account: user.accounts[0], // Return full account details
+      currency: user.accounts[0].currency || 'USD'
     });
+
   } catch (err) {
-    console.error('Error checking account:', err);
+    console.error('Account check error:', err);
     res.status(500).json({ 
       success: false,
-      message: 'Server error' 
+      message: 'Server error during account verification' 
     });
   }
 });
