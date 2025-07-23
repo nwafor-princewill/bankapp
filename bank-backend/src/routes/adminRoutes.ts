@@ -68,6 +68,7 @@ router.get('/users', auth, isAdmin, async (req, res) => {
 router.get('/transactions', auth, isAdmin, async (req, res) => {
   try {
     const transactions = await BankTransaction.find()
+      .populate('userId', 'firstName lastName')
       .sort({ createdAt: -1 })
       .limit(100);
     res.json(transactions);
@@ -78,7 +79,6 @@ router.get('/transactions', auth, isAdmin, async (req, res) => {
 });
 
 // Backdate transaction
-// Backdate transaction endpoint
 router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
