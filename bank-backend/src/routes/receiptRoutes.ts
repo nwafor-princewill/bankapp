@@ -1,17 +1,16 @@
 import { Router } from 'express';
 import auth from '../middleware/auth';
 import Receipt from '../models/receipt';
-import BankTransaction from '../models/BankTransaction';
 
 const router = Router();
 
 // Get receipt for a transaction
-router.get('/:transactionId', auth, async (req, res) => {
+router.get('/:reference', auth, async (req, res) => {  // Changed from transactionId to reference
   try {
     const receipt = await Receipt.findOne({ 
-      transactionId: req.params.transactionId,
+      reference: req.params.reference,  // Changed from transactionId to reference
       userId: req.user?.id 
-    }).populate('transactionId');
+    });
 
     if (!receipt) {
       return res.status(404).json({ 

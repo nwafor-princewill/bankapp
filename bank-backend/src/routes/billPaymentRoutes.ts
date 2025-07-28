@@ -5,6 +5,7 @@ import AccountSummary from '../models/AccountSummary';
 import User from '../models/User';
 import { updateAccountBalance } from '../services/accountService';
 import { createTransaction } from '../services/transactionService';
+import Receipt from '../models/receipt';
 
 const router = Router();
 
@@ -91,6 +92,21 @@ router.post('/', auth, async (req, res) => {
       undefined,
       currency
     );
+
+    // Add receipt creation
+    await Receipt.create({
+      transactionId: transaction._id,
+      reference: reference || `BILL-${Date.now()}`,
+      userId: userId,
+      accountNumber: primaryAccount.accountNumber,
+      amount: -numericAmount,
+      type: TransactionType.PAYMENT,
+      description: `Bill payment to ${billerId}`,
+      balanceAfter: newBalance,
+      status: 'completed',
+      currency: currency,
+      transactionDate: new Date()
+    });
 
     // Update user account balance
     primaryAccount.balance = newBalance;

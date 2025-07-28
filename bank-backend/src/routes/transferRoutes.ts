@@ -3,6 +3,7 @@ import auth from '../middleware/auth';
 import User from '../models/User';
 import AccountSummary from '../models/AccountSummary';
 import BankTransaction, { TransactionType, TransferType } from '../models/BankTransaction';
+import Receipt from '../models/receipt';
 
 const router = Router();
 
@@ -90,13 +91,13 @@ router.post('/', auth, async (req, res) => {
     // Calculate new balance
     const newBalance = primaryAccount.balance - numericAmount;
     
-    // Create transaction record with transfer type
-    await BankTransaction.create({
+    // Replace the existing BankTransaction.create block with:
+    const transaction = await BankTransaction.create({
       userId,
       accountNumber: primaryAccount.accountNumber,
       amount: -numericAmount,
       type: TransactionType.TRANSFER,
-      transferType, // This is where we use the transferType
+      transferType,
       description: description || 
         (transferType === 'international' 
           ? `International transfer to ${accountName}` 
@@ -106,7 +107,6 @@ router.post('/', auth, async (req, res) => {
       reference: `TRX-${Date.now()}`,
       status: 'completed',
       currency,
-      // Additional fields for international transfers
       ...(transferType === 'international' && {
         recipientDetails: {
           accountName,
@@ -117,6 +117,32 @@ router.post('/', auth, async (req, res) => {
           phone
         }
       })
+    });
+
+    // Then add the receipt creation
+    await Receipt.create({
+      transactionId: transaction._id,
+      reference: transaction.reference,
+      userId: userId,
+      accountNumber: primaryAccount.accountNumber,
+      amount: -numericAmount,
+      type: TransactionType.TRANSFER,
+      description: description || 
+        (transferType === 'international' 
+          ? `International transfer to ${accountName}` 
+          : `Transfer to ${toAccount}`),
+      balanceAfter: newBalance,
+      recipientDetails: transferType === 'international' ? {
+        accountName,
+        bankName,
+        bankAddress,
+        swiftIban,
+        email,
+        phone
+      } : undefined,
+      status: 'completed',
+      currency: currency,
+      transactionDate: new Date()
     });
 
     // Update user account balance
