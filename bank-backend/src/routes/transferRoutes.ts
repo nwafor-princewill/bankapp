@@ -14,8 +14,7 @@ router.post('/', auth, async (req, res) => {
       toAccount, 
       amount, 
       description,
-      transferType = 'domestic', // Default to domestic if not specified
-      // International transfer fields
+      transferType = 'domestic',
       accountName,
       bankAddress,
       swiftIban,
@@ -91,7 +90,19 @@ router.post('/', auth, async (req, res) => {
     // Calculate new balance
     const newBalance = primaryAccount.balance - numericAmount;
     
-    // Replace the existing BankTransaction.create block with:
+    // Prepare recipient details for all transfer types
+    const recipientDetails = {
+      accountName: accountName || (transferType === 'internal' ? 'Internal Recipient' : bankName || 'External Recipient'),
+      accountNumber: toAccount,
+      ...(transferType === 'international' && {
+        bankName,
+        bankAddress,
+        swiftIban,
+        email,
+        phone
+      })
+    };
+
     const transaction = await BankTransaction.create({
       userId,
       accountNumber: primaryAccount.accountNumber,
@@ -107,19 +118,10 @@ router.post('/', auth, async (req, res) => {
       reference: `TRX-${Date.now()}`,
       status: 'completed',
       currency,
-      ...(transferType === 'international' && {
-        recipientDetails: {
-          accountName,
-          bankName,
-          bankAddress,
-          swiftIban,
-          email,
-          phone
-        }
-      })
+      recipientDetails
     });
 
-    // Then add the receipt creation
+    // Create receipt with consistent recipient details
     await Receipt.create({
       transactionId: (transaction._id as string | { toString(): string }).toString(),
       reference: transaction.reference,
@@ -132,14 +134,7 @@ router.post('/', auth, async (req, res) => {
           ? `International transfer to ${accountName}` 
           : `Transfer to ${toAccount}`),
       balanceAfter: newBalance,
-      recipientDetails: transferType === 'international' ? {
-        accountName,
-        bankName,
-        bankAddress,
-        swiftIban,
-        email,
-        phone
-      } : undefined,
+      recipientDetails,
       status: 'completed',
       currency: currency,
       transactionDate: new Date()
@@ -173,7 +168,7 @@ router.post('/', auth, async (req, res) => {
       newBalance,
       currency,
       transferType,
-      reference: transaction.reference // Return the reference to the frontend
+      reference: transaction.reference
     });
 
   } catch (err) {

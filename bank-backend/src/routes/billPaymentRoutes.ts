@@ -28,7 +28,7 @@ router.get('/billers', auth, async (req, res) => {
   }
 });
 
-// Process bill payment (now works like transfer)
+// Process bill payment
 router.post('/', auth, async (req, res) => {
   try {
     const { billerId, amount, paymentDate, reference } = req.body;
@@ -50,7 +50,7 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    // Get user and primary account (like transfer code)
+    // Get user and primary account
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ 
@@ -77,6 +77,22 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
+    // Find biller details
+    const billers = [
+      { id: '1', name: 'Electricity Company', category: 'Utilities', accountNumber: 'ELEC-12345' },
+      { id: '2', name: 'Water Corporation', category: 'Utilities', accountNumber: 'WATER-67890' },
+      { id: '3', name: 'Internet Provider', category: 'Telecom', accountNumber: 'NET-54321' },
+      { id: '4', name: 'Cable TV', category: 'Entertainment', accountNumber: 'TV-98765' },
+      { id: '5', name: 'Mobile Carrier', category: 'Telecom', accountNumber: 'MOBILE-13579' }
+    ];
+    const biller = billers.find(b => b.id === billerId);
+    if (!biller) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid biller'
+      });
+    }
+
     // Calculate new balance
     const newBalance = primaryAccount.balance - numericAmount;
     
@@ -86,34 +102,42 @@ router.post('/', auth, async (req, res) => {
       primaryAccount.accountNumber,
       -numericAmount,
       TransactionType.PAYMENT,
-      `Bill payment to ${billerId}`,
+      `Bill payment to ${biller.name}`,
       newBalance,
-      // reference,
-      reference || `BILL-${Date.now()}`, // Ensure reference exists
+      reference || `BILL-${Date.now()}`,
+      biller.accountNumber,
+      currency,
       undefined,
-      currency
+      {
+        accountName: biller.name,
+        accountNumber: biller.accountNumber
+      }
     );
 
     // Add receipt creation
     await Receipt.create({
-      transactionId: transaction._id,
-      reference: transaction.reference || `BILL-${Date.now()}`,
+      transactionId: (transaction._id as any).toString(),
+      reference: transaction.reference,
       userId: userId,
       accountNumber: primaryAccount.accountNumber,
       amount: -numericAmount,
       type: TransactionType.PAYMENT,
-      description: `Bill payment to ${billerId}`,
+      description: `Bill payment to ${biller.name}`,
       balanceAfter: newBalance,
       status: 'completed',
       currency: currency,
-      transactionDate: new Date()
+      transactionDate: new Date(),
+      recipientDetails: {
+        accountName: biller.name,
+        accountNumber: biller.accountNumber
+      }
     });
 
     // Update user account balance
     primaryAccount.balance = newBalance;
     await user.save();
 
-    // Update AccountSummary (like transfer code)
+    // Update AccountSummary
     await AccountSummary.findOneAndUpdate(
       { userId, accountNumber: primaryAccount.accountNumber },
       {
@@ -136,7 +160,7 @@ router.post('/', auth, async (req, res) => {
       message: 'Payment successful',
       newBalance,
       currency,
-      reference: transaction.reference // Return the reference to the frontend
+      reference: transaction.reference
     });
 
   } catch (err) {
