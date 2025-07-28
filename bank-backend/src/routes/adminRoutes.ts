@@ -6,6 +6,7 @@ import AccountSummary from '../models/AccountSummary';
 import { updateAccountBalance } from '../services/accountService';
 import { TransactionType } from '../models/BankTransaction';
 import BankTransaction from '../models/BankTransaction';
+import Receipt from '../models/receipt';
 
 const router = Router();
 
@@ -137,6 +138,12 @@ router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
 
     // Save the transaction
     await transaction.save({ session });
+
+    // Add this:
+    await Receipt.findOneAndUpdate(
+      { transactionId: transaction._id },
+      { $set: { transactionDate: backdate } }
+    ).session(session);
 
     // Update account summary
     await AccountSummary.findOneAndUpdate(

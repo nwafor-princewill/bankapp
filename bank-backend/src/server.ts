@@ -19,6 +19,7 @@ import loanRoutes from './routes/loanRoutes';
 import serviceRequestRoutes from './routes/serviceRequestRoutes';
 import accountMaintenanceRoutes from './routes/accountMaintenanceRoutes';
 import adminRoutes from './routes/adminRoutes';
+import receiptRoutes from './routes/receiptRoutes';
 
 dotenv.config();
 
@@ -68,6 +69,7 @@ app.use('/api/loans', loanRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/account-maintenance', accountMaintenanceRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/receipts', receiptRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;

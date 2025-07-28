@@ -1,6 +1,7 @@
-import BankTransaction from '../models/BankTransaction';
+import BankTransaction, { TransferType } from '../models/BankTransaction';
 import { TransactionType } from '../models/BankTransaction';
 import { updateAccountBalance } from './accountService';
+import Receipt from '../models/receipt';
 
 
 export const createTransaction = async (
@@ -12,9 +13,11 @@ export const createTransaction = async (
   balanceAfter: number,
   reference: string,
   recipientAccount?: string,
-  currency: string = 'USD' // Add currency parameter
+  currency: string = 'USD',
+  transferType?: TransferType,
+  recipientDetails?: any
 ) => {
-  return BankTransaction.create({
+  const transaction = await BankTransaction.create({
     userId,
     accountNumber,
     amount,
@@ -24,8 +27,28 @@ export const createTransaction = async (
     recipientAccount,
     reference,
     status: 'completed',
-    currency // Add to creation
+    currency,
+    transferType,
+    recipientDetails
   });
+
+  // Create receipt
+  await Receipt.create({
+    transactionId: transaction._id,
+    userId,
+    accountNumber,
+    amount,
+    type,
+    description,
+    balanceAfter,
+    recipientDetails: transaction.recipientDetails,
+    reference,
+    status: 'completed',
+    currency,
+    transactionDate: transaction.createdAt
+  });
+
+  return transaction;
 };
 
 // ... after creating transaction
