@@ -34,7 +34,7 @@ export const createTransaction = async (
 
   // Create receipt
   await Receipt.create({
-    transactionId: transaction._id,
+    transactionId: transaction.reference, // Use reference as transaction ID
     userId,
     accountNumber,
     amount,

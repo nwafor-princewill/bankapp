@@ -1,7 +1,7 @@
 import mongoose, { Document } from 'mongoose';
 
 export interface IReceipt extends Document {
-  transactionId: mongoose.Types.ObjectId;
+  transactionId: string;
   userId: mongoose.Types.ObjectId;
   accountNumber: string;
   amount: number;
@@ -17,7 +17,9 @@ export interface IReceipt extends Document {
 }
 
 const receiptSchema = new mongoose.Schema<IReceipt>({
-  transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'BankTransaction', required: true },
+//   transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'BankTransaction', required: true },
+// To:
+transactionId: { type: String, required: true },  // Store reference string instead
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   accountNumber: { type: String, required: true },
   amount: { type: Number, required: true },
