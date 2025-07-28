@@ -121,7 +121,7 @@ router.post('/', auth, async (req, res) => {
 
     // Then add the receipt creation
     await Receipt.create({
-      transactionId: transaction._id,
+      transactionId: (transaction._id as string | { toString(): string }).toString(),
       reference: transaction.reference,
       userId: userId,
       accountNumber: primaryAccount.accountNumber,
@@ -172,7 +172,8 @@ router.post('/', auth, async (req, res) => {
       message: 'Transfer successful',
       newBalance,
       currency,
-      transferType
+      transferType,
+      reference: transaction.reference // Return the reference to the frontend
     });
 
   } catch (err) {

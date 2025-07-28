@@ -34,7 +34,8 @@ export const createTransaction = async (
 
   // Create receipt
   await Receipt.create({
-    transactionId: transaction.reference, // Use reference as transaction ID
+    transactionId: (transaction._id as any).toString(), // Use reference as transaction ID
+    reference: transaction.reference, // Store the lookup reference string
     userId,
     accountNumber,
     amount,
@@ -42,7 +43,7 @@ export const createTransaction = async (
     description,
     balanceAfter,
     recipientDetails: transaction.recipientDetails,
-    reference,
+    // reference,
     status: 'completed',
     currency,
     transactionDate: transaction.createdAt

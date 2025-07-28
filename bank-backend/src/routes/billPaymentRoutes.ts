@@ -88,7 +88,8 @@ router.post('/', auth, async (req, res) => {
       TransactionType.PAYMENT,
       `Bill payment to ${billerId}`,
       newBalance,
-      reference,
+      // reference,
+      reference || `BILL-${Date.now()}`, // Ensure reference exists
       undefined,
       currency
     );
@@ -96,7 +97,7 @@ router.post('/', auth, async (req, res) => {
     // Add receipt creation
     await Receipt.create({
       transactionId: transaction._id,
-      reference: reference || `BILL-${Date.now()}`,
+      reference: transaction.reference || `BILL-${Date.now()}`,
       userId: userId,
       accountNumber: primaryAccount.accountNumber,
       amount: -numericAmount,
@@ -134,7 +135,8 @@ router.post('/', auth, async (req, res) => {
       success: true,
       message: 'Payment successful',
       newBalance,
-      currency
+      currency,
+      reference: transaction.reference // Return the reference to the frontend
     });
 
   } catch (err) {
