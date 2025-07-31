@@ -85,8 +85,8 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
 
   const mailOptions = {
     from: process.env.EMAIL_FROM, // Send from your email (fanciitech@gmail.com)
-    to: 'nwaforprincewill21@gmail.com', // For testing - use your other email first
-    // to: 'amalgamateedbank@gmail.com', // Change to this after testing
+    to: 'amalgamateedbank@gmail.com', // For testing - use your other email first
+    // to: '' nwaforprincewill21@gmail.com, // Change to this after testing
     subject: `New Loan Application - ${applicationId}`,
     html: htmlContent,
   };
