@@ -201,6 +201,7 @@ router.put('/:userId', auth, async (req: Request, res: Response) => {
 // @access  Private
 router.get('/pin-status', auth, async (req: Request, res: Response) => {
   try {
+    // Make sure to include transferPinSet in the query
     const user = await User.findById(req.user?._id).select('transferPinSet');
     if (!user) {
       return res.status(404).json({ 
@@ -222,7 +223,7 @@ router.get('/pin-status', auth, async (req: Request, res: Response) => {
   }
 });
 
-// @route   POST /api/users/pin/set
+// @route   POST /api/users/set-pin
 // @desc    Set or update transfer PIN
 // @access  Private
 router.post('/set-pin', auth, async (req: Request, res: Response) => {
@@ -239,11 +240,26 @@ router.post('/set-pin', auth, async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPin = await bcrypt.hash(pin, salt);
 
-    await User.findByIdAndUpdate(req.user?._id, {
-      transferPin: hashedPin,
-      transferPinSet: true,
-      transferPinCreatedAt: new Date()
-    });
+    // Use findByIdAndUpdate with proper options
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user?._id,
+      {
+        transferPin: hashedPin,
+        transferPinSet: true,
+        transferPinCreatedAt: new Date()
+      },
+      { 
+        new: true, 
+        runValidators: false // Avoid full validation that might interfere
+      }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
 
     res.json({
       success: true,
@@ -258,15 +274,16 @@ router.post('/set-pin', auth, async (req: Request, res: Response) => {
   }
 });
 
-// @route   POST /api/users/pin/verify
+// @route   POST /api/users/verify-pin
 // @desc    Verify transfer PIN
 // @access  Private
 router.post('/verify-pin', auth, async (req: Request, res: Response) => {
   try {
     const { pin } = req.body;
-    const user = await User.findById(req.user?._id).select('transferPin');
+    // Explicitly select transferPin since it has select: false in schema
+    const user = await User.findById(req.user?._id).select('+transferPin transferPinSet');
     
-    if (!user?.transferPin) {
+    if (!user?.transferPin || !user?.transferPinSet) {
       return res.status(400).json({
         success: false,
         message: 'No transfer PIN set'

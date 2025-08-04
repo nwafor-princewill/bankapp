@@ -10,10 +10,13 @@ const router = Router();
 
 router.post('/', auth, async (req, res) => {
   try {
-    // ====== ADD THIS PIN VERIFICATION BLOCK ======
+    // ====== FIXED PIN VERIFICATION BLOCK ======
     const { pin, ...transferData } = req.body;
     
-    if (req.user?.transferPinSet) {
+    // Get user with PIN data explicitly selected
+    const userWithPin = await User.findById(req.user?._id).select('+transferPin transferPinSet');
+    
+    if (userWithPin?.transferPinSet) {
       if (!pin) {
         return res.status(403).json({
           success: false,
@@ -22,7 +25,14 @@ router.post('/', auth, async (req, res) => {
         });
       }
       
-      const isMatch = await bcrypt.compare(pin, req.user.transferPin);
+      if (!userWithPin.transferPin) {
+        return res.status(400).json({
+          success: false,
+          message: 'Transfer PIN not properly set'
+        });
+      }
+      
+      const isMatch = await bcrypt.compare(pin, userWithPin.transferPin);
       if (!isMatch) {
         return res.status(403).json({
           success: false,
@@ -30,7 +40,8 @@ router.post('/', auth, async (req, res) => {
         });
       }
     }
-    // ====== END OF PIN VERIFICATION BLOCK ======
+    // ====== END OF FIXED PIN VERIFICATION BLOCK ======
+    
     const { 
       bankName, 
       toAccount, 
@@ -42,7 +53,8 @@ router.post('/', auth, async (req, res) => {
       swiftIban,
       email,
       phone
-    } = req.body;
+    } = transferData; // Use transferData instead of req.body
+    
     const userId = req.user?.id;
 
     // Validate input based on transfer type
