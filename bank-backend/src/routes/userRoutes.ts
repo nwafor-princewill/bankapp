@@ -199,7 +199,7 @@ router.put('/:userId', auth, async (req: Request, res: Response) => {
 // @route   GET /api/users/pin/status
 // @desc    Check if user has transfer PIN set
 // @access  Private
-router.get('/pin/status', auth, async (req: Request, res: Response) => {
+router.get('/pin-status', auth, async (req: Request, res: Response) => {
   try {
     const user = await User.findById(req.user?._id).select('transferPinSet');
     if (!user) {
@@ -225,7 +225,7 @@ router.get('/pin/status', auth, async (req: Request, res: Response) => {
 // @route   POST /api/users/pin/set
 // @desc    Set or update transfer PIN
 // @access  Private
-router.post('/pin/set', auth, async (req: Request, res: Response) => {
+router.post('/set-pin', auth, async (req: Request, res: Response) => {
   try {
     const { pin } = req.body;
     
@@ -261,7 +261,7 @@ router.post('/pin/set', auth, async (req: Request, res: Response) => {
 // @route   POST /api/users/pin/verify
 // @desc    Verify transfer PIN
 // @access  Private
-router.post('/pin/verify', auth, async (req: Request, res: Response) => {
+router.post('/verify-pin', auth, async (req: Request, res: Response) => {
   try {
     const { pin } = req.body;
     const user = await User.findById(req.user?._id).select('transferPin');
