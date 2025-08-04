@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import User from '../models/User';
 import auth from '../middleware/auth';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
@@ -192,5 +193,99 @@ router.put('/:userId', auth, async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error during user update' });
   }
 });
+
+// ====== ADD THESE NEW ROUTES FOR TRANSFER PIN ======
+
+// @route   GET /api/users/pin/status
+// @desc    Check if user has transfer PIN set
+// @access  Private
+router.get('/pin/status', auth, async (req: Request, res: Response) => {
+  try {
+    const user = await User.findById(req.user?._id).select('transferPinSet');
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User not found' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      hasPin: user.transferPinSet || false
+    });
+  } catch (err) {
+    console.error('Error checking PIN status:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   POST /api/users/pin/set
+// @desc    Set or update transfer PIN
+// @access  Private
+router.post('/pin/set', auth, async (req: Request, res: Response) => {
+  try {
+    const { pin } = req.body;
+    
+    if (!pin || pin.length !== 4 || !/^\d+$/.test(pin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'PIN must be 4 digits'
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPin = await bcrypt.hash(pin, salt);
+
+    await User.findByIdAndUpdate(req.user?._id, {
+      transferPin: hashedPin,
+      transferPinSet: true,
+      transferPinCreatedAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      message: 'Transfer PIN set successfully'
+    });
+  } catch (err) {
+    console.error('Error setting PIN:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to set PIN'
+    });
+  }
+});
+
+// @route   POST /api/users/pin/verify
+// @desc    Verify transfer PIN
+// @access  Private
+router.post('/pin/verify', auth, async (req: Request, res: Response) => {
+  try {
+    const { pin } = req.body;
+    const user = await User.findById(req.user?._id).select('transferPin');
+    
+    if (!user?.transferPin) {
+      return res.status(400).json({
+        success: false,
+        message: 'No transfer PIN set'
+      });
+    }
+
+    const isMatch = await bcrypt.compare(pin, user.transferPin);
+    res.json({
+      success: isMatch,
+      message: isMatch ? 'PIN verified' : 'Invalid PIN'
+    });
+  } catch (err) {
+    console.error('Error verifying PIN:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Verification failed'
+    });
+  }
+});
+
 
 export default router;

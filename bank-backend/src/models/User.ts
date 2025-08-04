@@ -56,6 +56,10 @@ export interface IUser extends Document {
   accounts: IAccount[];
   cryptoWallets: ICryptoWallet[];
   cards: ICard[];
+  //transfer pin
+  transferPin?: string;
+  transferPinSet: boolean;
+  transferPinCreatedAt?: Date;
   rewardPoints: number;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
@@ -148,6 +152,7 @@ const userSchema = new mongoose.Schema<IUser>({
   accounts: [accountSchema],
   cryptoWallets: [cryptoWalletSchema],
   cards: [cardSchema],
+
   rewardPoints: { type: Number, default: 1000, min: 0 },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
@@ -157,7 +162,18 @@ const userSchema = new mongoose.Schema<IUser>({
     enum: ['active', 'blocked'],
     default: 'active'
   },
-  notificationPreferences: { type: notificationPreferencesSchema, default: () => ({}) }
+  notificationPreferences: { type: notificationPreferencesSchema, default: () => ({}) },
+  transferPin: { 
+    type: String,
+    select: false // Never return the PIN in queries
+  },
+  transferPinSet: {
+    type: Boolean,
+    default: false
+  },
+  transferPinCreatedAt: {
+    type: Date
+  }
 }, {
   timestamps: true
 });

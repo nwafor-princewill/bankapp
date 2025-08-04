@@ -4,11 +4,33 @@ import User from '../models/User';
 import AccountSummary from '../models/AccountSummary';
 import BankTransaction, { TransactionType, TransferType } from '../models/BankTransaction';
 import Receipt from '../models/receipt';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
 router.post('/', auth, async (req, res) => {
   try {
+    // ====== ADD THIS PIN VERIFICATION BLOCK ======
+    const { pin, ...transferData } = req.body;
+    
+    if (req.user?.transferPinSet) {
+      if (!pin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Transfer PIN required',
+          requiresPin: true
+        });
+      }
+      
+      const isMatch = await bcrypt.compare(pin, req.user.transferPin);
+      if (!isMatch) {
+        return res.status(403).json({
+          success: false,
+          message: 'Invalid transfer PIN'
+        });
+      }
+    }
+    // ====== END OF PIN VERIFICATION BLOCK ======
     const { 
       bankName, 
       toAccount, 
