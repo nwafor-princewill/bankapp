@@ -7,6 +7,7 @@ import { updateAccountBalance } from '../services/accountService';
 import { TransactionType } from '../models/BankTransaction';
 import BankTransaction from '../models/BankTransaction';
 import Receipt from '../models/receipt';
+import DeletedTransaction from '../models/DeletedTransaction';
 
 const router = Router();
 
@@ -393,6 +394,72 @@ router.delete('/delete-user/:userId', auth, isAdmin, async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: 'Failed to delete user' 
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
+// Add this route before the export default line
+router.delete('/delete-transaction/:transactionId', auth, isAdmin, async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { transactionId } = req.params;
+    const adminId = req.user._id;
+
+    if (!transactionId) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction ID is required'
+      });
+    }
+
+    // Find the transaction
+    const transaction = await BankTransaction.findById(transactionId).session(session);
+    if (!transaction) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    // Create a backup of the transaction before deletion
+    const transactionBackup = transaction.toObject();
+    
+    // Delete the transaction
+    await BankTransaction.deleteOne({ _id: transactionId }).session(session);
+    
+    // Delete associated receipt if exists
+    await Receipt.deleteOne({ transactionId }).session(session);
+
+    // Create a deletion record
+    await DeletedTransaction.create({
+      ...transactionBackup,
+      deletedBy: adminId,
+      deletionReason: 'Admin deletion',
+      originalTransactionId: transactionId,
+      deletedAt: new Date()
+    });
+
+    await session.commitTransaction();
+
+    res.json({
+      success: true,
+      message: 'Transaction deleted successfully',
+      deletedTransactionId: transactionId
+    });
+
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('Delete transaction error:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Failed to delete transaction';
+    res.status(500).json({
+      success: false,
+      message: errorMessage
     });
   } finally {
     session.endSession();
