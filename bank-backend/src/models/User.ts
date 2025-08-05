@@ -60,6 +60,8 @@ export interface IUser extends Document {
   transferPin?: string;
   transferPinSet: boolean;
   transferPinCreatedAt?: Date;
+  transferOtp?: string; // Add this line
+  transferOtpExpires?: Date; // Add this line
   rewardPoints: number;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
@@ -173,7 +175,16 @@ const userSchema = new mongoose.Schema<IUser>({
   },
   transferPinCreatedAt: {
     type: Date
-  }
+  },
+  // Add these two fields
+  transferOtp: {
+    type: String,
+    select: false // Hide from general queries for security
+  },
+  transferOtpExpires: {
+    type: Date,
+    select: false // Hide from general queries for security
+  },
 }, {
   timestamps: true
 });
