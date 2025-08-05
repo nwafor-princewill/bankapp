@@ -194,25 +194,31 @@ router.put('/:userId', auth, async (req: Request, res: Response) => {
   }
 });
 
-// ====== ADD THESE NEW ROUTES FOR TRANSFER PIN ======
+// ====== FIXED TRANSFER PIN ROUTES ======
 
-// @route   GET /api/users/pin/status
+// @route   GET /api/users/pin-status  <-- FIXED: This was the issue!
 // @desc    Check if user has transfer PIN set
 // @access  Private
 router.get('/pin-status', auth, async (req: Request, res: Response) => {
   try {
+    console.log('Checking PIN status for user:', req.user?._id);
+    
     // Make sure to include transferPinSet in the query
-    const user = await User.findById(req.user?._id).select('transferPinSet');
+    const user = await User.findById(req.user?._id).select('transferPinSet transferPinCreatedAt');
     if (!user) {
+      console.log('User not found during PIN status check');
       return res.status(404).json({ 
         success: false,
         message: 'User not found' 
       });
     }
     
+    const hasPin = Boolean(user.transferPinSet);
+    console.log('PIN status result:', { hasPin, transferPinSet: user.transferPinSet });
+    
     res.json({
       success: true,
-      hasPin: user.transferPinSet || false
+      hasPin: hasPin
     });
   } catch (err) {
     console.error('Error checking PIN status:', err);
@@ -229,6 +235,8 @@ router.get('/pin-status', auth, async (req: Request, res: Response) => {
 router.post('/set-pin', auth, async (req: Request, res: Response) => {
   try {
     const { pin } = req.body;
+    
+    console.log('Setting PIN for user:', req.user?._id);
     
     if (!pin || pin.length !== 4 || !/^\d+$/.test(pin)) {
       return res.status(400).json({
@@ -260,6 +268,8 @@ router.post('/set-pin', auth, async (req: Request, res: Response) => {
         message: 'User not found'
       });
     }
+
+    console.log('PIN set successfully for user:', req.user?._id, { transferPinSet: updatedUser.transferPinSet });
 
     res.json({
       success: true,
@@ -303,6 +313,5 @@ router.post('/verify-pin', auth, async (req: Request, res: Response) => {
     });
   }
 });
-
 
 export default router;
