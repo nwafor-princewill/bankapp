@@ -77,7 +77,7 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
       </div>
       
       <div class="footer">
-        <p>Amalgamated Bank - Loan Processing Department</p>
+        <p>ZenaTrust Bank - Loan Processing Department</p>
       </div>
     </body>
     </html>

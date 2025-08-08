@@ -6,6 +6,7 @@ import User from '../models/User';
 import { updateAccountBalance } from '../services/accountService';
 import { createTransaction } from '../services/transactionService';
 import Receipt from '../models/receipt';
+import { sendTransferOtpEmail } from '../utils/emailService';
 
 const router = Router();
 
@@ -28,10 +29,16 @@ router.get('/billers', auth, async (req, res) => {
   }
 });
 
-// Process bill payment
-router.post('/', auth, async (req, res) => {
+// Add global type declaration for otpStore
+declare global {
+  // eslint-disable-next-line no-var
+  var otpStore: { [userId: string]: { otp: string; expires: number } };
+}
+
+// Initiate bill payment (send OTP)
+router.post('/initiate', auth, async (req, res) => {
   try {
-    const { billerId, amount, paymentDate, reference } = req.body;
+    const { billerId, amount, paymentDate, reference, billerName } = req.body;
     const userId = req.user?.id;
 
     // Validation
@@ -49,6 +56,97 @@ router.post('/', auth, async (req, res) => {
         message: 'Invalid amount' 
       });
     }
+
+    const billers = [
+      { id: '1', name: 'Electricity Company', category: 'Utilities', accountNumber: 'ELEC-12345' },
+      { id: '2', name: 'Water Corporation', category: 'Utilities', accountNumber: 'WATER-67890' },
+      { id: '3', name: 'Internet Provider', category: 'Telecom', accountNumber: 'NET-54321' },
+      { id: '4', name: 'Cable TV', category: 'Entertainment', accountNumber: 'TV-98765' },
+      { id: '5', name: 'Mobile Carrier', category: 'Telecom', accountNumber: 'MOBILE-13579' }
+    ];
+    const biller = billers.find(b => b.id === billerId);
+    if (!biller) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid biller'
+      });
+    }
+
+    // Fetch user for email and firstName
+    const user = await User.findById(userId);
+    if (!user || !user.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'User email not found'
+      });
+    }
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store OTP (temporary in-memory for simplicity; use Redis/MongoDB in production)
+    // For now, assume stored in a simple in-memory object (not persistent)
+    globalThis.otpStore = globalThis.otpStore || {};
+    globalThis.otpStore[userId] = { otp, expires: Date.now() + 10 * 60 * 1000 }; // 10-min expiry
+
+    // Send OTP email
+    const emailSent = await sendTransferOtpEmail({
+      email: user.email,
+      otp,
+      firstName: user.firstName || 'Customer'
+    });
+
+    if (!emailSent) {
+      throw new Error('Failed to send OTP email');
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP sent to registered email'
+    });
+  } catch (err) {
+    console.error('Bill payment initiation error:', err);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to initiate bill payment' 
+    });
+  }
+});
+
+// Process bill payment (with OTP)
+router.post('/', auth, async (req, res) => {
+  try {
+    const { billerId, amount, paymentDate, reference, billerName, otp } = req.body;
+    const userId = req.user?.id;
+
+    // Validation
+    if (!billerId || !amount || !otp) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Missing required fields' 
+      });
+    }
+
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid amount' 
+      });
+    }
+
+    // Verify OTP
+    globalThis.otpStore = globalThis.otpStore || {};
+    const storedOtp = globalThis.otpStore[userId];
+    if (!storedOtp || storedOtp.otp !== otp || storedOtp.expires < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired OTP'
+      });
+    }
+
+    // Clear OTP after use
+    delete globalThis.otpStore[userId];
 
     // Get user and primary account
     const user = await User.findById(userId);
