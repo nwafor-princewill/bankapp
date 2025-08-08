@@ -1,11 +1,17 @@
 import { Router } from 'express';
 import auth from '../middleware/auth';
-import BankTransaction from '../models/BankTransaction';
+import transactionAuth from '../middleware/transactionAuth';
+import User from '../models/User';
+import AccountSummary from '../models/AccountSummary';
+import BankTransaction, { TransactionType, TransferType } from '../models/BankTransaction';
+import Receipt from '../models/receipt';
+import bcrypt from 'bcryptjs';
+import { sendTransferOtpEmail } from '../utils/emailService';
 import mongoose from 'mongoose';
 
 const router = Router();
 
-// Get transactions with pagination
+// Get transactions with pagination (blocked users can still view their transactions)
 router.get('/', auth, async (req, res) => {
   try {
     const { page = 1, limit = 10, type, startDate, endDate, accountNumber } = req.query;
@@ -58,8 +64,8 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Create a new transaction
-router.post('/', auth, async (req, res) => {
+// Create a new transaction (blocked users cannot create transactions)
+router.post('/', auth, transactionAuth, async (req, res) => {
   try {
     const { accountNumber, amount, type, description, balanceAfter, recipientAccount, reference } = req.body;
 

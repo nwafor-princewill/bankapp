@@ -4,8 +4,6 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import User, { IUser } from '../models/User';
 
-// We no longer need the 'AuthenticatedRequest' interface here. It's been deleted.
-
 const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -22,9 +20,7 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
       return res.status(401).send({ error: 'Authentication failed. User not found.' });
     }
 
-      if (user.status === 'blocked') {
-      return res.status(403).json({ message: 'Your account has been blocked' });
-    }
+    // Remove the blocked user check - let them login but we'll handle transactions separately
     req.user = user; 
     
     next();

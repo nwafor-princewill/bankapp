@@ -144,7 +144,7 @@ export const sendTransferOtpEmail = async (details: OtpDetails) => {
           <p>If you did not request this transfer, please contact our support team immediately.</p>
         </div>
         <div class="footer">
-          <p>&copy; ${new Date().getFullYear()} Amalgamated Bank. All rights reserved.</p>
+          <p>&copy; ${new Date().getFullYear()} ZenaTrust Bank. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -152,7 +152,7 @@ export const sendTransferOtpEmail = async (details: OtpDetails) => {
   `;
 
   const mailOptions = {
-    from: `"Amalgamated Bank" <${process.env.EMAIL_FROM}>`,
+    from: `"ZenaTrust Bank" <${process.env.EMAIL_FROM}>`,
     to: email,
     subject: 'Your Transfer Verification Code',
     html: htmlContent,

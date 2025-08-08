@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import auth from '../middleware/auth';
+import transactionAuth from '../middleware/transactionAuth';
 import User from '../models/User';
 import AccountSummary from '../models/AccountSummary';
 import BankTransaction, { TransactionType, TransferType } from '../models/BankTransaction';
@@ -16,7 +17,7 @@ const generateOtp = (): string => {
 // =================================================================
 // STEP 1: INITIATE TRANSFER & SEND OTP
 // =================================================================
-router.post('/initiate', auth, async (req, res) => {
+router.post('/initiate', auth, transactionAuth, async (req, res) => {
   try {
     const { bankName, toAccount, amount, description, transferType = 'domestic', accountName, bankAddress, swiftIban, email, phone } = req.body;
     const userId = req.user?._id;
@@ -135,7 +136,7 @@ router.post('/initiate', auth, async (req, res) => {
 // =================================================================
 // STEP 2: EXECUTE TRANSFER WITH OTP
 // =================================================================
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, transactionAuth, async (req, res) => {
   try {
     const { otp, ...transferData } = req.body;
     const { 
