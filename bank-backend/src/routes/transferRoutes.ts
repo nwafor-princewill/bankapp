@@ -5,11 +5,10 @@ import AccountSummary from '../models/AccountSummary';
 import BankTransaction, { TransactionType, TransferType } from '../models/BankTransaction';
 import Receipt from '../models/receipt';
 import bcrypt from 'bcryptjs';
-import { sendTransferOtpEmail } from '../utils/emailService'; // Import the new email function
+import { sendTransferOtpEmail } from '../utils/emailService';
 
 const router = Router();
 
-// A helper function to generate a random 6-digit OTP
 const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
@@ -19,11 +18,10 @@ const generateOtp = (): string => {
 // =================================================================
 router.post('/initiate', auth, async (req, res) => {
   try {
-    const { pin, bankName, toAccount, amount, description, transferType = 'domestic', accountName, bankAddress, swiftIban, email, phone } = req.body;
+    const { bankName, toAccount, amount, description, transferType = 'domestic', accountName, bankAddress, swiftIban, email, phone } = req.body;
     const userId = req.user?._id;
 
-    // ====== FIXED PIN VERIFICATION BLOCK ======
-    // Get user with PIN data explicitly selected
+    /* // ====== REMOVED PIN VERIFICATION BLOCK ======
     const userWithPin = await User.findById(userId).select('+transferPin transferPinSet');
     
     if (userWithPin?.transferPinSet) {
@@ -50,7 +48,7 @@ router.post('/initiate', auth, async (req, res) => {
         });
       }
     }
-    // ====== END OF FIXED PIN VERIFICATION BLOCK ======
+    // ====== END OF REMOVED PIN VERIFICATION BLOCK ====== */
 
     // Validate input based on transfer type
     if (!toAccount || !amount) {
@@ -60,7 +58,6 @@ router.post('/initiate', auth, async (req, res) => {
       });
     }
 
-    // Additional validation for international transfers
     if (transferType === 'international') {
       if (!accountName || !bankName || !swiftIban) {
         return res.status(400).json({
@@ -78,7 +75,6 @@ router.post('/initiate', auth, async (req, res) => {
       });
     }
 
-    // Get user's primary account
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ 
@@ -96,7 +92,6 @@ router.post('/initiate', auth, async (req, res) => {
 
     const primaryAccount = user.accounts[0];
 
-    // Check balance
     if (primaryAccount.balance < numericAmount) {
       return res.status(400).json({ 
         success: false,
@@ -104,7 +99,6 @@ router.post('/initiate', auth, async (req, res) => {
       });
     }
 
-    // For internal transfers, verify recipient account exists
     if (transferType === 'internal') {
       const recipient = await User.findOne({ 'accounts.accountNumber': toAccount });
       if (!recipient) {
@@ -115,17 +109,15 @@ router.post('/initiate', auth, async (req, res) => {
       }
     }
 
-    // --- Generate and Save OTP ---
     const otp = generateOtp();
     const salt = await bcrypt.genSalt(10);
-    user.transferOtp = await bcrypt.hash(otp, salt); // Hash the OTP for security
-    user.transferOtpExpires = new Date(Date.now() + 10 * 60 * 1000); // OTP expires in 10 minutes
+    user.transferOtp = await bcrypt.hash(otp, salt);
+    user.transferOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    // --- Send OTP Email ---
     await sendTransferOtpEmail({
       email: user.email,
-      otp: otp, // Send the plain text OTP to the user
+      otp: otp,
       firstName: user.firstName,
     });
 
@@ -165,14 +157,12 @@ router.post('/', auth, async (req, res) => {
         return res.status(400).json({ success: false, message: 'OTP is required' });
     }
 
-    // --- Fetch User and Verify OTP ---
     const user = await User.findById(userId).select('+transferOtp +transferOtpExpires');
     if (!user || !user.transferOtp || !user.transferOtpExpires) {
       return res.status(400).json({ success: false, message: 'No pending transfer found. Please try again.' });
     }
 
     if (new Date() > user.transferOtpExpires) {
-      // Clear expired OTP
       user.transferOtp = undefined;
       user.transferOtpExpires = undefined;
       await user.save();
@@ -184,9 +174,6 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid OTP.' });
     }
 
-    // --- OTP is valid, proceed with transfer logic ---
-
-    // Validate input based on transfer type
     if (!toAccount || !amount) {
       return res.status(400).json({ 
         success: false,
@@ -194,7 +181,6 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    // Additional validation for international transfers
     if (transferType === 'international') {
       if (!accountName || !bankName || !swiftIban) {
         return res.status(400).json({
@@ -222,7 +208,6 @@ router.post('/', auth, async (req, res) => {
     const primaryAccount = user.accounts[0];
     const currency = primaryAccount.currency || 'USD';
 
-    // Check balance
     if (primaryAccount.balance < numericAmount) {
       return res.status(400).json({ 
         success: false,
@@ -230,7 +215,6 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    // For internal transfers, verify recipient account exists
     if (transferType === 'internal') {
       const recipient = await User.findOne({ 'accounts.accountNumber': toAccount });
       if (!recipient) {
@@ -241,10 +225,8 @@ router.post('/', auth, async (req, res) => {
       }
     }
 
-    // Calculate new balance
     const newBalance = primaryAccount.balance - numericAmount;
     
-    // Prepare recipient details for all transfer types
     const recipientDetails = {
       accountName: accountName || (transferType === 'internal' ? 'Internal Recipient' : bankName || 'External Recipient'),
       accountNumber: toAccount,
@@ -275,7 +257,6 @@ router.post('/', auth, async (req, res) => {
       recipientDetails
     });
 
-    // Create receipt with consistent recipient details
     await Receipt.create({
       transactionId: (transaction._id as string | { toString(): string }).toString(),
       reference: transaction.reference,
@@ -294,13 +275,11 @@ router.post('/', auth, async (req, res) => {
       transactionDate: new Date()
     });
 
-    // --- Update Balances and Clear OTP ---
     user.accounts[0].balance = newBalance;
-    user.transferOtp = undefined; // Clear OTP after successful use
+    user.transferOtp = undefined;
     user.transferOtpExpires = undefined;
     await user.save();
 
-    // Update AccountSummary
     await AccountSummary.findOneAndUpdate(
       { userId, accountNumber: primaryAccount.accountNumber },
       {
@@ -329,7 +308,6 @@ router.post('/', auth, async (req, res) => {
 
   } catch (err) {
     console.error('Transfer execution error:', err);
-    // Attempt to clear OTP even if there's an error after verification
     try {
         const user = await User.findById(req.user?.id);
         if (user) {

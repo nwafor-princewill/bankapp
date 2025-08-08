@@ -8,30 +8,26 @@ import bcrypt from 'bcryptjs';
 
 const router = Router();
 
-// Use memory storage for production to avoid file system issues
 const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 5 * 1024 * 1024,
   },
   fileFilter: (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      // Pass an actual Error object to the callback
       cb(new Error('Only image files are allowed!'));
     }
   }
 });
 
-// Helper function to convert file to base64
 const convertToBase64 = (file: Express.Multer.File): string => {
   return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
 };
 
-// @route   GET /api/users
 router.get('/', async (req: Request, res: Response) => {
   try {
     const users = await User.find({}).select('-password');
@@ -42,7 +38,6 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// @route   GET /api/users/:userId
 router.get('/:userId', auth, async (req: Request, res: Response) => {
   try {
     const user = await User.findById(req.params.userId).select('-password');
@@ -56,9 +51,6 @@ router.get('/:userId', auth, async (req: Request, res: Response) => {
   }
 });
 
-// @route   POST /api/users/:userId/profile-picture
-// @desc    Upload profile picture
-// @access  Private
 router.post('/:userId/profile-picture', 
   auth, 
   upload.single('profilePicture'), 
@@ -92,11 +84,10 @@ router.post('/:userId/profile-picture',
 
       const profilePictureUrl = convertToBase64(req.file);
       
-      // **THE FIX:** Use findByIdAndUpdate instead of user.save() to avoid triggering full validation
       const updatedUser = await User.findByIdAndUpdate(
         userId,
         { profilePicture: profilePictureUrl },
-        { new: true, runValidators: false } // Set runValidators to false to avoid full validation
+        { new: true, runValidators: false }
       );
 
       console.log('Profile picture updated successfully');
@@ -109,7 +100,6 @@ router.post('/:userId/profile-picture',
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       
-      // **THE FIX:** We check if 'error' is an instance of Error before accessing '.message'.
       let errorMessage = 'Internal server error';
       if (error instanceof Error) {
         errorMessage = error.message;
@@ -120,12 +110,8 @@ router.post('/:userId/profile-picture',
         error: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error'
       });
     }
-  }
-);
+});
 
-// @route   DELETE /api/users/:userId/profile-picture
-// @desc    Delete profile picture
-// @access  Private
 router.delete('/:userId/profile-picture', 
   auth, 
   async (req: Request, res: Response) => {
@@ -141,11 +127,10 @@ router.delete('/:userId/profile-picture',
         return res.status(403).json({ message: 'You can only delete your own profile picture' });
       }
 
-      // **THE FIX:** Use findByIdAndUpdate instead of user.save() to avoid triggering full validation
       await User.findByIdAndUpdate(
         userId,
         { $unset: { profilePicture: 1 } },
-        { runValidators: false } // Set runValidators to false to avoid full validation
+        { runValidators: false }
       );
 
       res.json({ message: 'Profile picture deleted successfully' });
@@ -154,12 +139,8 @@ router.delete('/:userId/profile-picture',
       console.error('Error deleting profile picture:', error);
       res.status(500).json({ message: 'Server error during file deletion' });
     }
-  }
-);
+});
 
-// @route   PUT /api/users/:userId
-// @desc    Update user profile
-// @access  Private
 router.put('/:userId', auth, async (req: Request, res: Response) => {
   try {
     const userId = req.params.userId;
@@ -194,16 +175,11 @@ router.put('/:userId', auth, async (req: Request, res: Response) => {
   }
 });
 
-// ====== FIXED TRANSFER PIN ROUTES ======
-
-// @route   GET /api/users/pin-status  <-- FIXED: This was the issue!
-// @desc    Check if user has transfer PIN set
-// @access  Private
+/* // ====== REMOVED PIN ROUTES ======
 router.get('/pin-status', auth, async (req: Request, res: Response) => {
   try {
     console.log('Checking PIN status for user:', req.user?._id);
     
-    // Make sure to include transferPinSet in the query
     const user = await User.findById(req.user?._id).select('transferPinSet transferPinCreatedAt');
     if (!user) {
       console.log('User not found during PIN status check');
@@ -229,9 +205,6 @@ router.get('/pin-status', auth, async (req: Request, res: Response) => {
   }
 });
 
-// @route   POST /api/users/set-pin
-// @desc    Set or update transfer PIN
-// @access  Private
 router.post('/set-pin', auth, async (req: Request, res: Response) => {
   try {
     const { pin } = req.body;
@@ -248,7 +221,6 @@ router.post('/set-pin', auth, async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPin = await bcrypt.hash(pin, salt);
 
-    // Use findByIdAndUpdate with proper options
     const updatedUser = await User.findByIdAndUpdate(
       req.user?._id,
       {
@@ -258,7 +230,7 @@ router.post('/set-pin', auth, async (req: Request, res: Response) => {
       },
       { 
         new: true, 
-        runValidators: false // Avoid full validation that might interfere
+        runValidators: false
       }
     );
 
@@ -284,13 +256,9 @@ router.post('/set-pin', auth, async (req: Request, res: Response) => {
   }
 });
 
-// @route   POST /api/users/verify-pin
-// @desc    Verify transfer PIN
-// @access  Private
 router.post('/verify-pin', auth, async (req: Request, res: Response) => {
   try {
     const { pin } = req.body;
-    // Explicitly select transferPin since it has select: false in schema
     const user = await User.findById(req.user?._id).select('+transferPin transferPinSet');
     
     if (!user?.transferPin || !user?.transferPinSet) {
@@ -313,5 +281,6 @@ router.post('/verify-pin', auth, async (req: Request, res: Response) => {
     });
   }
 });
+// ====== END OF REMOVED PIN ROUTES ====== */
 
 export default router;
