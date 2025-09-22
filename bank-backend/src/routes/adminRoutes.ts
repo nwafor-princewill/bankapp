@@ -13,6 +13,20 @@ const router = Router();
 
 // Create a simple config model for storing BTC address
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
+
+// Configure nodemailer transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
 
 const configSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
@@ -463,6 +477,123 @@ router.delete('/delete-transaction/:transactionId', auth, isAdmin, async (req, r
     });
   } finally {
     session.endSession();
+  }
+});
+
+// Change user password
+router.post('/change-password', auth, isAdmin, async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body;
+
+    if (!userId || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID and new password are required',
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long',
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password without triggering full document validation
+    await User.findByIdAndUpdate(userId, {
+      password: hashedPassword,
+      $unset: {
+        resetPasswordToken: 1,
+        resetPasswordExpires: 1,
+      },
+    });
+
+    // Send notification email
+    const mailOptions = {
+      to: user.email,
+      from: process.env.EMAIL_FROM,
+      subject: 'Your Password Has Been Changed',
+      text: `Dear ${user.firstName},\n\nYour password was changed by an administrator. If you did not request this change, please contact support immediately.\n\nRegards,\nZenaTrust Team`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({
+      success: true,
+      message: `Password updated successfully for ${user.email}`,
+    });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to change password',
+    });
+  }
+});
+
+// Reset user password (sends reset link)
+router.post('/reset-user-password', auth, isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required',
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    const resetTokenExpiry = Date.now() + 3600000; // 1 hour expiry
+
+    // Update user with reset token
+    await User.findByIdAndUpdate(userId, {
+      resetPasswordToken: resetToken,
+      resetPasswordExpires: new Date(resetTokenExpiry),
+    });
+
+    // Send reset email
+    const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL}/reset-password?token=${resetToken}`;
+    const mailOptions = {
+      to: user.email,
+      from: process.env.EMAIL_FROM,
+      subject: 'Password Reset Request',
+      text: `Dear ${user.firstName},\n\nAn administrator has initiated a password reset for your account. Please click the link to reset your password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request this reset, please contact support.\n\nRegards,\nZenaTrust Team`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({
+      success: true,
+      message: `Password reset email sent to ${user.email}`,
+    });
+  } catch (err) {
+    console.error('Reset user password error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to initiate password reset',
+    });
   }
 });
 
