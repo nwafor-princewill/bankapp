@@ -1,4 +1,3 @@
-// utils/emailService.ts
 import nodemailer from 'nodemailer';
 
 interface LoanApplicationData {
@@ -18,13 +17,12 @@ interface LoanApplicationData {
   applicationId: string;
 }
 
-// Create transporter using your existing email credentials
 const createTransporter = () => {
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.EMAIL_FROM, // Your existing email from env
-      pass: process.env.EMAIL_PASSWORD, // Your existing app password from env
+      user: process.env.EMAIL_FROM,
+      pass: process.env.EMAIL_PASSWORD,
     },
   });
 };
@@ -84,9 +82,8 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
   `;
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM, // Send from your email (fanciitech@gmail.com)
-    to: 'amalgamateedbank@gmail.com', // For testing - use your other email first
-    // to: '' nwaforprincewill21@gmail.com, // Change to this after testing
+    from: process.env.EMAIL_FROM,
+    to: 'amalgamateedbank@gmail.com', // For testing
     subject: `New Loan Application - ${applicationId}`,
     html: htmlContent,
   };
@@ -101,9 +98,6 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
   }
 };
 
-// Add this entire function to the end of your emailService.ts file
-
-// Helper function to generate a random 6-digit OTP
 const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
@@ -165,5 +159,30 @@ export const sendTransferOtpEmail = async (details: OtpDetails) => {
   } catch (error) {
     console.error('Error sending OTP email:', error);
     return false;
+  }
+};
+
+// NEW: Generic sendEmail function for password management
+export const sendEmail = async (options: {
+  to: string;
+  subject: string;
+  text: string;
+}) => {
+  const transporter = createTransporter();
+
+  const mailOptions = {
+    from: `"ZenaTrust Bank" <${process.env.EMAIL_FROM}>`,
+    to: options.to,
+    subject: options.subject,
+    text: options.text,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully to:', options.to);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return { success: false, error };
   }
 };

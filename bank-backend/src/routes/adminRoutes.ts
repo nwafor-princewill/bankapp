@@ -8,30 +8,18 @@ import { TransactionType } from '../models/BankTransaction';
 import BankTransaction from '../models/BankTransaction';
 import Receipt from '../models/receipt';
 import DeletedTransaction from '../models/DeletedTransaction';
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { sendEmail } from '../utils/emailService'; // Import the shared email utility
 
 const router = Router();
 
 // Create a simple config model for storing BTC address
-import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import nodemailer from 'nodemailer';
-
-// Configure nodemailer transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
-
 const configSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   value: { type: String, required: true },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
 });
 
 const Config = mongoose.model('Config', configSchema);
@@ -52,16 +40,16 @@ router.get('/stats', auth, isAdmin, async (req, res) => {
     const users = await User.countDocuments();
     const activeUsers = await User.countDocuments();
     const totalBalance = await AccountSummary.aggregate([
-      { $group: { _id: null, total: { $sum: '$currentBalance' } } }
+      { $group: { _id: null, total: { $sum: '$currentBalance' } } },
     ]);
-    
+
     const btcAddress = await getBtcAddress();
-    
+
     res.json({
       users,
       activeUsers,
       totalBalance: totalBalance[0]?.total || 0,
-      btcAddress
+      btcAddress,
     });
   } catch (err) {
     console.error('Admin stats error:', err);
@@ -98,17 +86,16 @@ router.get('/transactions', auth, isAdmin, async (req, res) => {
 router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     const { transactionId, newDate } = req.body;
-    const adminId = req.user._id; // Assuming your auth middleware adds user to req
+    const adminId = req.user._id;
 
-    // Validate input
     if (!transactionId || !newDate) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Transaction ID and new date are required'
+        message: 'Transaction ID and new date are required',
       });
     }
 
@@ -117,7 +104,7 @@ router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Invalid date format'
+        message: 'Invalid date format',
       });
     }
 
@@ -125,101 +112,91 @@ router.post('/backdate-transaction', auth, isAdmin, async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Cannot backdate to a future date'
+        message: 'Cannot backdate to a future date',
       });
     }
 
-    // Find and validate transaction
     const transaction = await BankTransaction.findById(transactionId).session(session);
     if (!transaction) {
       await session.abortTransaction();
       return res.status(404).json({
         success: false,
-        message: 'Transaction not found'
+        message: 'Transaction not found',
       });
     }
 
-    // Store original date if not already stored
     if (!transaction.originalDate) {
       transaction.originalDate = transaction.createdAt;
     }
 
-    // Create a deep clone of the current transaction for history
     const oldTransaction = transaction.toObject();
 
-    // Update the transaction date
     transaction.createdAt = backdate;
     transaction.lastModifiedBy = adminId;
 
-    // Save the transaction
     await transaction.save({ session });
 
-    // Add this:
     await Receipt.findOneAndUpdate(
       { transactionId: transaction._id },
-      { $set: { transactionDate: backdate } }
+      { $set: { transactionDate: backdate } },
     ).session(session);
 
-    // Update account summary
     await AccountSummary.findOneAndUpdate(
-      { 
+      {
         userId: transaction.userId,
-        accountNumber: transaction.accountNumber 
+        accountNumber: transaction.accountNumber,
       },
       { $set: { lastTransactionDate: new Date() } },
-      { session }
+      { session },
     );
 
-    // Commit the transaction
     await session.commitTransaction();
 
-    // Return success response with the updated transaction
     res.json({
       success: true,
       message: 'Transaction date updated successfully',
       transaction: {
         ...transaction.toObject(),
-        previousDate: oldTransaction.createdAt
-      }
+        previousDate: oldTransaction.createdAt,
+      },
     });
-
-  }  catch (err: unknown) {
+  } catch (err) {
     await session.abortTransaction();
     console.error('Backdate transaction error:', err);
     const errorMessage = err instanceof Error ? err.message : 'Failed to backdate transaction';
     res.status(500).json({
       success: false,
       message: errorMessage,
-      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
     });
-}finally {
+  } finally {
     session.endSession();
   }
 });
 
-// Add this endpoint to get modification history
+// Get transaction history
 router.get('/transaction-history/:id', auth, isAdmin, async (req, res) => {
   try {
     const transaction = await BankTransaction.findById(req.params.id)
       .select('modificationHistory reference accountNumber')
       .populate('modificationHistory.changedBy', 'firstName lastName email');
-    
+
     if (!transaction) {
       return res.status(404).json({
         success: false,
-        message: 'Transaction not found'
+        message: 'Transaction not found',
       });
     }
 
     res.json({
       success: true,
-      history: transaction.modificationHistory || []
+      history: transaction.modificationHistory || [],
     });
   } catch (err) {
     console.error('Transaction history error:', err);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch transaction history'
+      message: 'Failed to fetch transaction history',
     });
   }
 });
@@ -228,9 +205,11 @@ router.get('/transaction-history/:id', auth, isAdmin, async (req, res) => {
 router.post('/credit', auth, isAdmin, async (req, res) => {
   try {
     const { userEmail, accountNumber, amount, description } = req.body;
-    
+
     if (!userEmail || !accountNumber || !amount) {
-      return res.status(400).json({ message: 'Missing required fields: userEmail, accountNumber, amount' });
+      return res.status(400).json({
+        message: 'Missing required fields: userEmail, accountNumber, amount',
+      });
     }
 
     const numericAmount = parseFloat(amount);
@@ -243,34 +222,37 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const userAccount = user.accounts.find(acc => acc.accountNumber === accountNumber);
+    const userAccount = user.accounts.find((acc) => acc.accountNumber === accountNumber);
     if (!userAccount) {
       return res.status(404).json({ message: 'Account not found for this user' });
     }
 
     await User.updateOne(
       { _id: user._id, 'accounts.accountNumber': accountNumber },
-      { 
+      {
         $inc: { 'accounts.$.balance': Number(amount) },
-        $set: { 'accounts.$.updatedAt': new Date() }
-      }
+        $set: { 'accounts.$.updatedAt': new Date() },
+      },
     );
 
     const updatedSummary = await AccountSummary.findOneAndUpdate(
-      { userId: user._id, accountNumber: accountNumber },
-      { 
-        $inc: { 
+      {
+        userId: user._id,
+        accountNumber: accountNumber,
+      },
+      {
+        $inc: {
           currentBalance: numericAmount,
           availableBalance: numericAmount,
           'monthlyStats.totalDeposits': numericAmount,
-          'monthlyStats.netChange': numericAmount
+          'monthlyStats.netChange': numericAmount,
         },
-        $set: { 
+        $set: {
           lastTransactionDate: new Date(),
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       },
-      { new: true, upsert: true }
+      { new: true, upsert: true },
     );
 
     await BankTransaction.create({
@@ -281,18 +263,18 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
       description: description || 'Admin credit',
       balanceAfter: updatedSummary.currentBalance,
       reference: `ADMIN-CREDIT-${Date.now()}`,
-      status: 'completed'
+      status: 'completed',
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `Successfully credited $${numericAmount.toFixed(2)} to account ${accountNumber}`,
-      newBalance: updatedSummary.currentBalance
+      newBalance: updatedSummary.currentBalance,
     });
   } catch (err) {
     console.error('Admin credit error:', err);
-    res.status(500).json({ 
-      message: 'Server error: ' + (err instanceof Error ? err.message : String(err)) 
+    res.status(500).json({
+      message: 'Server error: ' + (err instanceof Error ? err.message : String(err)),
     });
   }
 });
@@ -301,21 +283,21 @@ router.post('/credit', auth, isAdmin, async (req, res) => {
 router.post('/update-btc', auth, isAdmin, async (req, res) => {
   try {
     const { newAddress } = req.body;
-    
+
     if (!newAddress) {
       return res.status(400).json({ message: 'BTC address is required' });
     }
 
     await Config.findOneAndUpdate(
       { key: 'BTC_ADDRESS' },
-      { 
+      {
         key: 'BTC_ADDRESS',
         value: newAddress,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
-    
+
     res.json({ success: true, message: 'BTC address updated successfully' });
   } catch (err) {
     console.error('Admin BTC update error:', err);
@@ -327,37 +309,37 @@ router.post('/update-btc', auth, isAdmin, async (req, res) => {
 router.post('/block-user', auth, isAdmin, async (req, res) => {
   try {
     const { userId, block } = req.body;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'User ID is required' 
+        message: 'User ID is required',
       });
     }
 
     const user = await User.findByIdAndUpdate(
       userId,
       { status: block ? 'blocked' : 'active' },
-      { new: true }
+      { new: true },
     );
 
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'User not found' 
+        message: 'User not found',
       });
     }
 
     res.json({
       success: true,
       message: `User ${block ? 'blocked' : 'unblocked'} successfully`,
-      user
+      user,
     });
   } catch (err) {
     console.error('Block user error:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to update user status' 
+      message: 'Failed to update user status',
     });
   }
 });
@@ -366,55 +348,50 @@ router.post('/block-user', auth, isAdmin, async (req, res) => {
 router.delete('/delete-user/:userId', auth, isAdmin, async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     const { userId } = req.params;
-    
+
     if (!userId) {
       await session.abortTransaction();
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'User ID is required' 
+        message: 'User ID is required',
       });
     }
 
-    // Delete user's transactions first
     await BankTransaction.deleteMany({ userId }).session(session);
-    
-    // Delete user's account summaries
     await AccountSummary.deleteMany({ userId }).session(session);
-    
-    // Finally delete the user
     const deletedUser = await User.findByIdAndDelete(userId).session(session);
-    
+
     if (!deletedUser) {
       await session.abortTransaction();
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'User not found' 
+        message: 'User not found',
       });
     }
 
     await session.commitTransaction();
-    
+
     res.json({
       success: true,
       message: 'User deleted permanently',
-      deletedUserId: userId
+      deletedUserId: userId,
     });
   } catch (err) {
     await session.abortTransaction();
     console.error('Delete user error:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Failed to delete user' 
+      message: 'Failed to delete user',
     });
   } finally {
     session.endSession();
   }
 });
 
-// Add this route before the export default line
+// Delete transaction
 router.delete('/delete-transaction/:transactionId', auth, isAdmin, async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -427,36 +404,29 @@ router.delete('/delete-transaction/:transactionId', auth, isAdmin, async (req, r
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Transaction ID is required'
+        message: 'Transaction ID is required',
       });
     }
 
-    // Find the transaction
     const transaction = await BankTransaction.findById(transactionId).session(session);
     if (!transaction) {
       await session.abortTransaction();
       return res.status(404).json({
         success: false,
-        message: 'Transaction not found'
+        message: 'Transaction not found',
       });
     }
 
-    // Create a backup of the transaction before deletion
     const transactionBackup = transaction.toObject();
-    
-    // Delete the transaction
     await BankTransaction.deleteOne({ _id: transactionId }).session(session);
-    
-    // Delete associated receipt if exists
     await Receipt.deleteOne({ transactionId }).session(session);
 
-    // Create a deletion record
     await DeletedTransaction.create({
       ...transactionBackup,
       deletedBy: adminId,
       deletionReason: 'Admin deletion',
       originalTransactionId: transactionId,
-      deletedAt: new Date()
+      deletedAt: new Date(),
     });
 
     await session.commitTransaction();
@@ -464,16 +434,15 @@ router.delete('/delete-transaction/:transactionId', auth, isAdmin, async (req, r
     res.json({
       success: true,
       message: 'Transaction deleted successfully',
-      deletedTransactionId: transactionId
+      deletedTransactionId: transactionId,
     });
-
   } catch (err) {
     await session.abortTransaction();
     console.error('Delete transaction error:', err);
     const errorMessage = err instanceof Error ? err.message : 'Failed to delete transaction';
     res.status(500).json({
       success: false,
-      message: errorMessage
+      message: errorMessage,
     });
   } finally {
     session.endSession();
@@ -507,11 +476,9 @@ router.post('/change-password', auth, isAdmin, async (req, res) => {
       });
     }
 
-    // Hash the new password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Update password without triggering full document validation
     await User.findByIdAndUpdate(userId, {
       password: hashedPassword,
       $unset: {
@@ -520,15 +487,20 @@ router.post('/change-password', auth, isAdmin, async (req, res) => {
       },
     });
 
-    // Send notification email
-    const mailOptions = {
+    const emailResult = await sendEmail({
       to: user.email,
-      from: process.env.EMAIL_FROM,
       subject: 'Your Password Has Been Changed',
       text: `Dear ${user.firstName},\n\nYour password was changed by an administrator. If you did not request this change, please contact support immediately.\n\nRegards,\nZenaTrust Team`,
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (!emailResult.success) {
+      console.error('Email sending failed in change-password:', emailResult.error);
+      return res.status(500).json({
+        success: false,
+        message: 'Password updated but failed to send notification email',
+        error: process.env.NODE_ENV === 'development' ? (emailResult.error && typeof emailResult.error === 'object' && 'message' in emailResult.error ? (emailResult.error as any).message : String(emailResult.error)) : undefined,
+      });
+    }
 
     res.json({
       success: true,
@@ -539,6 +511,7 @@ router.post('/change-password', auth, isAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to change password',
+      error: process.env.NODE_ENV === 'development' && err instanceof Error ? err.message : undefined,
     });
   }
 });
@@ -563,26 +536,29 @@ router.post('/reset-user-password', auth, isAdmin, async (req, res) => {
       });
     }
 
-    // Generate reset token
     const resetToken = crypto.randomBytes(20).toString('hex');
-    const resetTokenExpiry = Date.now() + 3600000; // 1 hour expiry
+    const resetTokenExpiry = Date.now() + 3600000;
 
-    // Update user with reset token
     await User.findByIdAndUpdate(userId, {
       resetPasswordToken: resetToken,
       resetPasswordExpires: new Date(resetTokenExpiry),
     });
 
-    // Send reset email
-    const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL}/reset-password?token=${resetToken}`;
-    const mailOptions = {
+    const resetUrl = `${process.env.BASE_URL}/reset-password?token=${resetToken}`;
+    const emailResult = await sendEmail({
       to: user.email,
-      from: process.env.EMAIL_FROM,
       subject: 'Password Reset Request',
-      text: `Dear ${user.firstName},\n\nAn administrator has initiated a password reset for your account. Please click the link to reset your password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request this reset, please contact support.\n\nRegards,\nZenaTrust Team`,
-    };
+      text: `Dear ${user.firstName},\n\nAn administrator has initiated a password reset for your account. Please click the following link to reset your password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request this reset, please contact support.\n\nRegards,\nZenaTrust Team`,
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (!emailResult.success) {
+      console.error('Email sending failed in reset-user-password:', emailResult.error);
+      return res.status(500).json({
+        success: false,
+        message: 'Reset token generated but failed to send email',
+        error: process.env.NODE_ENV === 'development' ? (emailResult.error && typeof emailResult.error === 'object' && 'message' in emailResult.error ? (emailResult.error as any).message : String(emailResult.error)) : undefined,
+      });
+    }
 
     res.json({
       success: true,
@@ -593,6 +569,7 @@ router.post('/reset-user-password', auth, isAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to initiate password reset',
+      error: process.env.NODE_ENV === 'development' && err instanceof Error ? err.message : undefined,
     });
   }
 });
