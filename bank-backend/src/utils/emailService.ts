@@ -89,7 +89,7 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
 
   const mailOptions = {
     from: process.env.EMAIL_FROM,
-    to: 'amalgamateedbank@gmail.com', // For testing
+    to: 'zenatrustbank@gmail.com', // For testing
     subject: `New Loan Application - ${applicationId}`,
     html: htmlContent,
   };

@@ -487,10 +487,16 @@ router.post('/change-password', auth, isAdmin, async (req, res) => {
       },
     });
 
+    // const emailResult = await sendEmail({
+    //   to: user.email,
+    //   subject: 'Your Password Has Been Changed',
+    //   text: `Dear ${user.firstName},\n\nYour password was changed by an administrator. If you did not request this change, please contact support immediately.\n\nRegards,\nZenaTrust Team`,
+    // });
+
     const emailResult = await sendEmail({
       to: user.email,
-      subject: 'Your Password Has Been Changed',
-      text: `Dear ${user.firstName},\n\nYour password was changed by an administrator. If you did not request this change, please contact support immediately.\n\nRegards,\nZenaTrust Team`,
+      subject: 'Thank You for Being a Valued ZenaTrust Customer',
+      text: `Dear ${user.firstName},\n\nWe wanted to take a moment to express our sincere appreciation for choosing ZenaTrust. It's truly a pleasure to serve exceptional customers like you.\n\nYour trust in our services inspires us to continually deliver the highest standards of excellence and security. We are committed to ensuring your experience with us remains exceptional at every touchpoint.\n\nIf there's anything we can do to make your experience even better, please don't hesitate to reach out to our dedicated support team.\n\nThank you for being part of the ZenaTrust family.\n\nWarm regards,\nThe ZenaTrust Team`,
     });
 
     if (!emailResult.success) {
