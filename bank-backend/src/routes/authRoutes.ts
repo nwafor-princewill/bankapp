@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import User, { CURRENCIES } from '../models/User';
 import { generateAccountNumber, generateAccountName } from '../utils/accountUtils';
+import { sendTransferOtpEmail } from '../utils/emailService';
 
 const router = Router();
 
@@ -34,6 +35,7 @@ interface RegisterRequest {
     answer: string;
   }>;
   currency: string;
+  otp: string;
 }
 
 interface LoginRequest {
@@ -50,25 +52,77 @@ interface ResetPasswordRequest {
   newPassword: string;
 }
 
-// @route   POST /api/auth/register
-router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
-  const { firstName, lastName, email, password, confirmPassword, gender, dateOfBirth, country, state, address, phone, securityQuestions, currency } = req.body;
+interface SendOtpRequest {
+  email: string;
+  firstName: string;
+}
+
+// In-memory OTP store (for simplicity; use Redis or DB in production)
+const otpStore: { [email: string]: { otp: string; expires: number } } = {};
+
+// @route   POST /api/auth/send-otp
+router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Response) => {
+  const { email, firstName } = req.body;
 
   try {
+    if (!email || !firstName) {
+      return res.status(400).json({ message: 'Email and first name are required' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (user) {
+      return res.status(400).json({ message: 'Email already exists' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+
+    otpStore[email.toLowerCase()] = { otp, expires };
+
+    const success = await sendTransferOtpEmail({ email, firstName, otp }, 'signup'); // Updated call
+
+    if (!success) {
+      return res.status(500).json({ message: 'Failed to send OTP email' });
+    }
+
+    res.json({ message: 'OTP sent successfully' });
+  } catch (err) {
+    console.error('Send OTP error:', err);
+    res.status(500).json({ message: 'Failed to send OTP' });
+  }
+});
+
+// @route   POST /api/auth/register
+router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
+  const { firstName, lastName, email, password, confirmPassword, gender, dateOfBirth, country, state, address, phone, securityQuestions, currency, otp } = req.body;
+
+  try {
+    // Validate OTP
+    const storedOtp = otpStore[email.toLowerCase()];
+    if (!storedOtp || storedOtp.otp !== otp || storedOtp.expires < Date.now()) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
     // Enhanced validation for all required fields
     const requiredFields = {
       firstName: 'First name',
-      lastName: 'Last name', 
+      lastName: 'Last name',
       email: 'Email',
       password: 'Password',
-      confirmPassword: 'Confirm password', // ADD THIS LINE
+      confirmPassword: 'Confirm password',
       gender: 'Gender',
       dateOfBirth: 'Date of birth',
       country: 'Country',
       state: 'State',
       address: 'Address',
       phone: 'Phone number',
-      currency: 'Currency' // ADD THIS LINE TOO
+      currency: 'Currency',
+      otp: 'OTP'
     };
 
     // Check for missing required fields
@@ -80,8 +134,8 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     }
 
     if (missingFields.length > 0) {
-      return res.status(400).json({ 
-        message: `The following fields are required: ${missingFields.join(', ')}` 
+      return res.status(400).json({
+        message: `The following fields are required: ${missingFields.join(', ')}`
       });
     }
 
@@ -100,21 +154,21 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     }
 
     // Security questions validation
-    if (!securityQuestions || 
+    if (!securityQuestions ||
         !Array.isArray(securityQuestions) ||
-        securityQuestions.length < 1 || 
-        !securityQuestions[0]?.question?.trim() || 
+        securityQuestions.length < 1 ||
+        !securityQuestions[0]?.question?.trim() ||
         !securityQuestions[0]?.answer?.trim()) {
-      return res.status(400).json({ 
-        message: 'At least one complete security question with answer is required' 
+      return res.status(400).json({
+        message: 'At least one complete security question with answer is required'
       });
     }
 
     // Check for duplicate security questions
-    const duplicateQuestions = securityQuestions.filter((q, index) => 
+    const duplicateQuestions = securityQuestions.filter((q, index) =>
       q.question && securityQuestions.findIndex(item => item.question === q.question) !== index
     );
-    
+
     if (duplicateQuestions.length > 0) {
       return res.status(400).json({ message: 'Please select different security questions' });
     }
@@ -124,7 +178,7 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: 'Please enter a valid email address' });
     }
-    
+
     // Check if user already exists
     let user = await User.findOne({ email: email.toLowerCase() });
     if (user) {
@@ -161,6 +215,9 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
 
     await user.save();
 
+    // Clear OTP after successful registration
+    delete otpStore[email.toLowerCase()];
+
     // Verify JWT_SECRET exists
     if (!process.env.JWT_SECRET) {
       throw new Error('JWT_SECRET not configured');
@@ -184,18 +241,18 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     });
   } catch (err) {
     console.error('Registration error:', err);
-    
+
     // Handle mongoose validation errors
     if (typeof err === 'object' && err !== null && 'name' in err && (err as any).name === 'ValidationError') {
       const errors = Object.values((err as any).errors).map((error: any) => error.message);
       return res.status(400).json({ message: errors.join(', ') });
     }
-    
+
     // Handle duplicate key errors
     if (typeof err === 'object' && err !== null && 'code' in err && (err as any).code === 11000) {
       return res.status(400).json({ message: 'Email already exists' });
     }
-    
+
     res.status(500).json({ message: 'Server error during registration' });
   }
 });
@@ -214,8 +271,6 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response) 
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
-
-    // REMOVED: Check if user is blocked - now blocked users can login
 
     // Debug logging (remove in production)
     console.log('Login attempt for:', email);
@@ -240,7 +295,7 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response) 
         email: user.email,
         accounts: user.accounts,
         isAdmin: user.isAdmin,
-        status: user.status // Include status so frontend knows if user is blocked
+        status: user.status
       }
     });
   } catch (err) {
@@ -263,27 +318,16 @@ router.post('/forgot-password', async (req: Request<{}, {}, ForgotPasswordReques
       return res.json({ success: true, message: 'If an account exists, you will receive a reset email' });
     }
 
-    // Generate reset token
     const resetToken = crypto.randomBytes(20).toString('hex');
     const resetTokenExpiry = Date.now() + 3600000; // 1 hour expiry
 
-    // Update only the reset fields without triggering full validation
     await User.findByIdAndUpdate(user._id, {
       resetPasswordToken: resetToken,
       resetPasswordExpires: new Date(resetTokenExpiry)
     });
 
-    // user.resetPasswordToken = resetToken;
-    // user.resetPasswordExpires = new Date(resetTokenExpiry);
-    // await user.save();
-
-    // Create reset URL
-    // const resetUrl = `${process.env.BASE_URL}/reset-password?token=${resetToken}`;
-
-    // To this:
     const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL}/reset-password?token=${resetToken}`;
 
-    // Send email
     const mailOptions = {
       to: user.email,
       from: process.env.EMAIL_FROM,
@@ -322,17 +366,9 @@ router.post('/reset-password', async (req: Request<{}, {}, ResetPasswordRequest>
       return res.status(400).json({ success: false, message: 'Invalid or expired token' });
     }
 
-    // Hash the new password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Update password and clear token
-    // user.password = newPassword;
-    // user.resetPasswordToken = undefined;
-    // user.resetPasswordExpires = undefined;
-    // await user.save();
-
-      // Update password and clear token fields without full validation
     await User.findByIdAndUpdate(user._id, {
       password: hashedPassword,
       $unset: {
@@ -341,7 +377,6 @@ router.post('/reset-password', async (req: Request<{}, {}, ResetPasswordRequest>
       }
     });
 
-    // Send confirmation email
     const mailOptions = {
       to: user.email,
       from: process.env.EMAIL_FROM,
@@ -357,7 +392,6 @@ router.post('/reset-password', async (req: Request<{}, {}, ResetPasswordRequest>
     res.status(500).json({ success: false, message: 'Error resetting password' });
   }
 });
-
 
 // @route   GET /api/auth/me
 router.get('/me', async (req: Request, res: Response) => {

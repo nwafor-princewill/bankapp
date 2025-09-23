@@ -17,6 +17,12 @@ interface LoanApplicationData {
   applicationId: string;
 }
 
+interface OtpDetails {
+  email: string;
+  otp: string;
+  firstName: string;
+}
+
 const createTransporter = () => {
   return nodemailer.createTransport({
     service: 'gmail',
@@ -102,16 +108,16 @@ const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-interface OtpDetails {
-  email: string;
-  otp: string;
-  firstName: string;
-}
-
-export const sendTransferOtpEmail = async (details: OtpDetails) => {
+export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transfer' | 'signup' = 'transfer') => {
   const transporter = createTransporter();
   
   const { email, otp, firstName } = details;
+
+  const subject = context === 'signup' ? 'ZenaTrust Email Verification OTP' : 'Your Transfer Verification Code';
+  const actionText = context === 'signup' ? 'complete your email verification for registration' : 'complete your transfer';
+  const warningText = context === 'signup' 
+    ? 'If you did not initiate this registration, please ignore this email or contact our support team.'
+    : 'If you did not request this transfer, please contact our support team immediately.';
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -129,13 +135,13 @@ export const sendTransferOtpEmail = async (details: OtpDetails) => {
     <body>
       <div class="container">
         <div class="header">
-          <h2>Your One-Time Password</h2>
+          <h2>${context === 'signup' ? 'Email Verification OTP' : 'Your One-Time Password'}</h2>
         </div>
         <div class="content">
           <p>Hello ${firstName},</p>
-          <p>Please use the following code to complete your transfer. This code is valid for 10 minutes.</p>
+          <p>Please use the following code to ${actionText}. This code is valid for 10 minutes.</p>
           <div class="otp-code">${otp}</div>
-          <p>If you did not request this transfer, please contact our support team immediately.</p>
+          <p>${warningText}</p>
         </div>
         <div class="footer">
           <p>&copy; ${new Date().getFullYear()} ZenaTrust Bank. All rights reserved.</p>
@@ -148,13 +154,13 @@ export const sendTransferOtpEmail = async (details: OtpDetails) => {
   const mailOptions = {
     from: `"ZenaTrust Bank" <${process.env.EMAIL_FROM}>`,
     to: email,
-    subject: 'Your Transfer Verification Code',
+    subject,
     html: htmlContent,
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log('Transfer OTP email sent successfully to:', email);
+    console.log(`${context === 'signup' ? 'Signup' : 'Transfer'} OTP email sent successfully to:`, email);
     return true;
   } catch (error) {
     console.error('Error sending OTP email:', error);
