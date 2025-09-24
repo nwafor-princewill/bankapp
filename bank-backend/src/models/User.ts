@@ -5,6 +5,9 @@ import bcrypt from 'bcryptjs';
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'KRW', 'BRL', 'MXN', 'SGD', 'HKD', 'SEK', 'NOK', 'ZAR', 'RUB', 'TRY', 'NGN'] as const;
 export type Currency = typeof CURRENCIES[number];
 
+export const ID_TYPES = ['passport', 'national_id', 'drivers_license'] as const;
+export type IdType = typeof ID_TYPES[number];
+
 export interface IAccount {
   accountNumber: string;
   accountName: string;
@@ -61,13 +64,15 @@ export interface IUser extends Document {
   transferPinSet: boolean;
   transferPinCreatedAt?: Date;
   transferOtp?: string; // Add this line
-  transferOtpExpires?: Date; // Add this line
+  transferOtpExpires?: Date; // Add this line
   rewardPoints: number;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
   isAdmin: boolean;
   status: 'active' | 'blocked';
   notificationPreferences?: INotificationPreferences; 
+  idType?: IdType; // NEW: ID type
+  idDocumentPath?: string; // NEW: Path to uploaded ID document
   matchPassword(enteredPassword: string): Promise<boolean>;
 }
 
@@ -177,14 +182,21 @@ const userSchema = new mongoose.Schema<IUser>({
     type: Date
   },
   // Add these two fields
-  transferOtp: {
-    type: String,
-    select: false // Hide from general queries for security
-  },
-  transferOtpExpires: {
-    type: Date,
-    select: false // Hide from general queries for security
-  },
+  transferOtp: {
+    type: String,
+    select: false // Hide from general queries for security
+  },
+  transferOtpExpires: {
+    type: Date,
+    select: false // Hide from general queries for security
+  },
+  idType: { // NEW: ID type
+    type: String,
+    enum: ID_TYPES,
+  },
+  idDocumentPath: { // NEW: Path to uploaded ID document
+    type: String,
+  },
 }, {
   timestamps: true
 });

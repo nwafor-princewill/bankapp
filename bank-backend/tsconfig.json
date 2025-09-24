@@ -118,12 +118,12 @@
 
     
       "typeRoots": [
-    "node_modules/@types", "./src/@types"
+    "node_modules/@types", "./src/@types", "./types"
   ],
   
   },
   "include": [
-    "src/**/*"
+    "src/**/*", "types/**/*"
   ],
   "exclude": ["node_modules"]
 }
