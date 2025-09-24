@@ -3,11 +3,66 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
-import User, { CURRENCIES } from '../models/User';
+import User, { CURRENCIES, ID_TYPES } from '../models/User';
 import { generateAccountNumber, generateAccountName } from '../utils/accountUtils';
 import { sendTransferOtpEmail } from '../utils/emailService';
+import multer from 'multer';
+import path from 'path';
+import sharp from 'sharp';
+import pdfParse from 'pdf-parse';
+import fs from 'fs/promises';
 
 const router = Router();
+
+// Set up multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/ids'); // Folder to store ID documents
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`); // Unique filename
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: async (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!['.jpg', '.jpeg', '.png', '.pdf'].includes(ext)) {
+      return cb(new Error('Invalid file type. Only JPG, PNG, PDF allowed.'));
+    }
+    cb(null, true);
+  },
+});
+
+// Validate file content
+const validateFileContent = async (file: Express.Multer.File): Promise<boolean> => {
+  try {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+      // Validate image with sharp
+      const metadata = await sharp(file.path).metadata();
+      if (metadata.width < 300 || metadata.height < 300) {
+        await fs.unlink(file.path);
+        throw new Error('Image resolution too low (minimum 300x300)');
+      }
+      return true;
+    } else if (ext === '.pdf') {
+      // Validate PDF with pdf-parse
+      const data = await fs.readFile(file.path);
+      const pdfData = await pdfParse(data);
+      if (!pdfData.text.trim()) {
+        await fs.unlink(file.path);
+        throw new Error('PDF contains no readable text');
+      }
+      return true;
+    }
+    return false;
+  } catch (err) {
+    throw err instanceof Error ? err : new Error('Invalid file content');
+  }
+};
 
 // Email transporter configuration
 const transporter = nodemailer.createTransport({
@@ -36,6 +91,7 @@ interface RegisterRequest {
   }>;
   currency: string;
   otp: string;
+  idType: string;
 }
 
 interface LoginRequest {
@@ -84,11 +140,7 @@ router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Respo
 
     otpStore[email.toLowerCase()] = { otp, expires };
 
-    const success = await sendTransferOtpEmail({ email, firstName, otp }, 'signup'); // Updated call
-
-    if (!success) {
-      return res.status(500).json({ message: 'Failed to send OTP email' });
-    }
+    await sendTransferOtpEmail({ email, firstName, otp }, 'signup');
 
     res.json({ message: 'OTP sent successfully' });
   } catch (err) {
@@ -98,8 +150,9 @@ router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Respo
 });
 
 // @route   POST /api/auth/register
-router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
-  const { firstName, lastName, email, password, confirmPassword, gender, dateOfBirth, country, state, address, phone, securityQuestions, currency, otp } = req.body;
+router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
+  const { firstName, lastName, email, password, confirmPassword, gender, dateOfBirth, country, state, address, phone, securityQuestions, currency, otp, idType } = req.body;
+  const idDocument = req.file; // Uploaded file from multer
 
   try {
     // Validate OTP
@@ -122,7 +175,9 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
       address: 'Address',
       phone: 'Phone number',
       currency: 'Currency',
-      otp: 'OTP'
+      otp: 'OTP',
+      idType: 'ID type',
+      idDocument: 'ID document'
     };
 
     // Check for missing required fields
@@ -133,10 +188,36 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
       }
     }
 
+    if (!idDocument) {
+      missingFields.push('ID document');
+    }
+
     if (missingFields.length > 0) {
       return res.status(400).json({
         message: `The following fields are required: ${missingFields.join(', ')}`
       });
+    }
+
+    // Check for empty or too small file
+    if (!idDocument || idDocument.size === 0) {
+      return res.status(400).json({ message: 'Uploaded ID document is empty' });
+    }
+    if (idDocument.size < 1024) {
+      await fs.unlink(idDocument.path);
+      return res.status(400).json({ message: 'Uploaded ID document is too small' });
+    }
+
+    // Validate file content
+    try {
+      await validateFileContent(idDocument);
+    } catch (err) {
+      await fs.unlink(idDocument.path);
+      return res.status(400).json({ message: err instanceof Error ? err.message : 'Uploaded file is corrupted or invalid' });
+    }
+
+    // ID type validation
+    if (!ID_TYPES.includes(idType as any)) {
+      return res.status(400).json({ message: 'Invalid ID type. Must be passport, national_id, or drivers_license' });
     }
 
     // Password validation
@@ -210,7 +291,9 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
         accountName,
         balance: 0.00,
         currency: currency as typeof CURRENCIES[number],
-      }]
+      }],
+      idType,
+      idDocumentPath: idDocument.path,
     });
 
     await user.save();
@@ -251,6 +334,22 @@ router.post('/register', async (req: Request<{}, {}, RegisterRequest>, res: Resp
     // Handle duplicate key errors
     if (typeof err === 'object' && err !== null && 'code' in err && (err as any).code === 11000) {
       return res.status(400).json({ message: 'Email already exists' });
+    }
+
+    // Handle multer errors
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File size exceeds 5MB limit' });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+
+    if (err instanceof Error && err.message.includes('Invalid file type')) {
+      return res.status(400).json({ message: err.message });
+    }
+
+    if (err instanceof Error && (err.message.includes('Image resolution too low') || err.message.includes('PDF contains no readable text'))) {
+      return res.status(400).json({ message: err.message });
     }
 
     res.status(500).json({ message: 'Server error during registration' });
