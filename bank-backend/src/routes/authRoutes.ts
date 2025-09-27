@@ -2,10 +2,9 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import nodemailer from 'nodemailer';
 import User, { CURRENCIES, ID_TYPES } from '../models/User';
 import { generateAccountNumber, generateAccountName } from '../utils/accountUtils';
-import { sendTransferOtpEmail } from '../utils/emailService';
+import { sendTransferOtpEmail, sendEmail } from '../utils/emailService';
 import multer from 'multer';
 import path from 'path';
 import sharp from 'sharp';
@@ -63,15 +62,6 @@ const validateFileContent = async (file: Express.Multer.File): Promise<boolean> 
     throw err instanceof Error ? err : new Error('Invalid file content');
   }
 };
-
-// Email transporter configuration
-const transporter = nodemailer.createTransport({
-  service: 'Gmail',
-  auth: {
-    user: process.env.EMAIL_FROM,
-    pass: process.env.EMAIL_PASSWORD
-  },
-});
 
 interface RegisterRequest {
   firstName: string;
@@ -140,7 +130,10 @@ router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Respo
 
     otpStore[email.toLowerCase()] = { otp, expires };
 
-    await sendTransferOtpEmail({ email, firstName, otp }, 'signup');
+    const emailSent = await sendTransferOtpEmail({ email, firstName, otp }, 'signup');
+    if (!emailSent) {
+      throw new Error('Failed to send OTP email');
+    }
 
     res.json({ message: 'OTP sent successfully' });
   } catch (err) {
@@ -371,9 +364,6 @@ router.post('/login', async (req: Request<{}, {}, LoginRequest>, res: Response) 
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // Debug logging (remove in production)
-    console.log('Login attempt for:', email);
-
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
@@ -427,14 +417,15 @@ router.post('/forgot-password', async (req: Request<{}, {}, ForgotPasswordReques
 
     const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL}/reset-password?token=${resetToken}`;
 
-    const mailOptions = {
+    const emailSent = await sendEmail({
       to: user.email,
-      from: process.env.EMAIL_FROM,
       subject: 'Password Reset Request',
       text: `You requested a password reset. Please click the link to reset your password:\n\n${resetUrl}\n\nThis link expires in 1 hour.`,
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (!emailSent.success) {
+      throw new Error('Failed to send reset email');
+    }
 
     res.json({ success: true, message: 'Password reset email sent' });
   } catch (err) {
@@ -476,14 +467,15 @@ router.post('/reset-password', async (req: Request<{}, {}, ResetPasswordRequest>
       }
     });
 
-    const mailOptions = {
+    const emailSent = await sendEmail({
       to: user.email,
-      from: process.env.EMAIL_FROM,
       subject: 'Password Changed',
-      text: `Your password has been successfully changed.`
-    };
+      text: `Your password has been successfully changed.`,
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (!emailSent.success) {
+      throw new Error('Failed to send confirmation email');
+    }
 
     res.json({ success: true, message: 'Password updated successfully', redirectTo: '/' });
   } catch (err) {
