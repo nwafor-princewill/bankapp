@@ -25,10 +25,12 @@ interface OtpDetails {
 
 const createTransporter = () => {
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
+    port: parseInt(process.env.BREVO_SMTP_PORT || '587'),
+    secure: false,
     auth: {
-      user: process.env.EMAIL_FROM,
-      pass: process.env.EMAIL_PASSWORD,
+      user: process.env.BREVO_SMTP_USER,
+      pass: process.env.BREVO_SMTP_PASS,
     },
   });
 };
@@ -88,8 +90,8 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
   `;
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM,
-    to: 'zenatrustbank@gmail.com', // For testing
+    from: `"ZenaTrust Bank" <${process.env.EMAIL_FROM}>`,
+    to: 'amalgamateedbank@gmail.com', // For testing
     subject: `New Loan Application - ${applicationId}`,
     html: htmlContent,
   };
@@ -168,7 +170,6 @@ export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transf
   }
 };
 
-// NEW: Generic sendEmail function for password management
 export const sendEmail = async (options: {
   to: string;
   subject: string;
