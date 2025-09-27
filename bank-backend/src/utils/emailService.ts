@@ -24,14 +24,23 @@ interface OtpDetails {
 }
 
 const createTransporter = () => {
+  if (!process.env.BREVO_SMTP_HOST || !process.env.BREVO_SMTP_PORT || !process.env.BREVO_SMTP_USER || !process.env.BREVO_SMTP_PASS) {
+    throw new Error('Missing Brevo SMTP configuration in environment variables');
+  }
+
   return nodemailer.createTransport({
-    host: process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com',
-    port: parseInt(process.env.BREVO_SMTP_PORT || '587'),
+    host: process.env.BREVO_SMTP_HOST,
+    port: parseInt(process.env.BREVO_SMTP_PORT),
     secure: false,
     auth: {
       user: process.env.BREVO_SMTP_USER,
       pass: process.env.BREVO_SMTP_PASS,
     },
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    logger: true, // Enable logging for debugging
+    debug: true, // Detailed logs
   });
 };
 
@@ -91,23 +100,19 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
 
   const mailOptions = {
     from: `"ZenaTrust Bank" <${process.env.EMAIL_FROM}>`,
-    to: 'amalgamateedbank@gmail.com', // For testing
+    to: 'amalgamateedbank@gmail.com',
     subject: `New Loan Application - ${applicationId}`,
     html: htmlContent,
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log('Loan application email sent successfully');
+    console.log('Loan application email sent successfully to:', mailOptions.to);
     return true;
   } catch (error) {
     console.error('Error sending loan application email:', error);
-    return false;
+    throw error;
   }
-};
-
-const generateOtp = (): string => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transfer' | 'signup' = 'transfer') => {
@@ -166,7 +171,7 @@ export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transf
     return true;
   } catch (error) {
     console.error('Error sending OTP email:', error);
-    return false;
+    throw error;
   }
 };
 
