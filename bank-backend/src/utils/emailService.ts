@@ -1,5 +1,3 @@
-import Brevo from '@getbrevo/brevo';
-
 interface LoanApplicationData {
   userInfo: {
     firstName: string;
@@ -23,19 +21,35 @@ interface OtpDetails {
   firstName: string;
 }
 
-const createBrevoClient = () => {
+const sendBrevoEmail = async (emailData: any) => {
   if (!process.env.BREVO_API_KEY) {
     throw new Error('Missing Brevo API key in environment variables');
   }
-  const client = new Brevo.TransactionalEmailsApi();
-  client.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-  return client;
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'api-key': process.env.BREVO_API_KEY
+    },
+    body: JSON.stringify(emailData)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Brevo API Error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText
+    });
+    throw new Error(`Failed to send email: ${response.status} ${response.statusText}`);
+  }
+
+  return await response.json();
 };
 
 export const sendLoanApplicationEmail = async (applicationData: LoanApplicationData) => {
-  const client = createBrevoClient();
-  const sendSmtpEmail = new Brevo.SendSmtpEmail();
-  
   const { userInfo, loanDetails, applicationId } = applicationData;
   
   const htmlContent = `
@@ -87,14 +101,24 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
     </html>
   `;
 
-  sendSmtpEmail.sender = { name: 'ZenaTrust Bank', email: process.env.EMAIL_FROM };
-  sendSmtpEmail.to = [{ email: 'amalgamateedbank@gmail.com' }];
-  sendSmtpEmail.subject = `New Loan Application - ${applicationId}`;
-  sendSmtpEmail.htmlContent = htmlContent;
+  const emailData = {
+    sender: {
+      name: 'ZenaTrust Bank',
+      email: process.env.EMAIL_FROM
+    },
+    to: [
+      {
+        email: 'amalgamateedbank@gmail.com',
+        name: 'ZenaTrust Loan Department'
+      }
+    ],
+    subject: `New Loan Application - ${applicationId}`,
+    htmlContent: htmlContent
+  };
 
   try {
-    await client.sendTransacEmail(sendSmtpEmail);
-    console.log('Loan application email sent successfully to:', sendSmtpEmail.to[0].email);
+    await sendBrevoEmail(emailData);
+    console.log('Loan application email sent successfully to:', emailData.to[0].email);
     return true;
   } catch (error) {
     console.error('Error sending loan application email:', error);
@@ -103,9 +127,6 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
 };
 
 export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transfer' | 'signup' = 'transfer') => {
-  const client = createBrevoClient();
-  const sendSmtpEmail = new Brevo.SendSmtpEmail();
-  
   const { email, otp, firstName } = details;
 
   const subject = context === 'signup' ? 'ZenaTrust Email Verification OTP' : 'Your Transfer Verification Code';
@@ -146,17 +167,28 @@ export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transf
     </html>
   `;
 
-  sendSmtpEmail.sender = { name: 'ZenaTrust Bank', email: process.env.EMAIL_FROM };
-  sendSmtpEmail.to = [{ email }];
-  sendSmtpEmail.subject = subject;
-  sendSmtpEmail.htmlContent = htmlContent;
+  const emailData = {
+    sender: {
+      name: 'ZenaTrust Bank',
+      email: process.env.EMAIL_FROM
+    },
+    to: [
+      {
+        email: email,
+        name: firstName
+      }
+    ],
+    subject: subject,
+    htmlContent: htmlContent
+  };
 
   try {
-    await client.sendTransacEmail(sendSmtpEmail);
+    await sendBrevoEmail(emailData);
     console.log(`${context === 'signup' ? 'Signup' : 'Transfer'} OTP email sent successfully to:`, email);
     return true;
   } catch (error) {
     console.error('Error sending OTP email:', error);
+    console.error('Email data:', JSON.stringify(emailData, null, 2));
     throw error;
   }
 };
@@ -166,16 +198,22 @@ export const sendEmail = async (options: {
   subject: string;
   text: string;
 }) => {
-  const client = createBrevoClient();
-  const sendSmtpEmail = new Brevo.SendSmtpEmail();
-
-  sendSmtpEmail.sender = { name: 'ZenaTrust Bank', email: process.env.EMAIL_FROM };
-  sendSmtpEmail.to = [{ email: options.to }];
-  sendSmtpEmail.subject = options.subject;
-  sendSmtpEmail.textContent = options.text;
+  const emailData = {
+    sender: {
+      name: 'ZenaTrust Bank',
+      email: process.env.EMAIL_FROM
+    },
+    to: [
+      {
+        email: options.to
+      }
+    ],
+    subject: options.subject,
+    textContent: options.text
+  };
 
   try {
-    await client.sendTransacEmail(sendSmtpEmail);
+    await sendBrevoEmail(emailData);
     console.log('Email sent successfully to:', options.to);
     return { success: true };
   } catch (error) {
