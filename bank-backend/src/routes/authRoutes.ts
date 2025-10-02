@@ -10,6 +10,7 @@ import path from 'path';
 import sharp from 'sharp';
 import pdfParse from 'pdf-parse';
 import fs from 'fs/promises';
+import EmailVerification from '../models/EmailVerification';
 
 const router = Router();
 
@@ -159,6 +160,7 @@ interface SendOtpRequest {
 //   }
 // });
 
+
 // @route   POST /api/auth/send-otp
 router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Response) => {
   const { email, firstName } = req.body;
@@ -173,26 +175,29 @@ router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Respo
       return res.status(400).json({ message: 'Please enter a valid email address' });
     }
 
+    // Check if user already exists
     const user = await User.findOne({ email: email.toLowerCase() });
     if (user) {
       return res.status(400).json({ message: 'Email already exists' });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // CHANGED: Store OTP in database instead of memory
-    await User.findOneAndUpdate(
+    // Store OTP in separate collection (upsert to replace any existing OTP)
+    await EmailVerification.findOneAndUpdate(
       { email: email.toLowerCase() },
       {
-        emailVerificationOtp: otp,
-        emailVerificationOtpExpires: new Date(expires)
+        email: email.toLowerCase(),
+        otp,
+        firstName,
+        expiresAt
       },
       { upsert: true, new: true }
     );
 
-    console.log('OTP generated:', otp); // Debug log
-    console.log('OTP expiry:', new Date(expires)); // Debug log
+    console.log('OTP generated for', email, ':', otp);
+    console.log('OTP expires at:', expiresAt);
 
     const emailSent = await sendTransferOtpEmail({ email, firstName, otp }, 'signup');
     if (!emailSent) {
@@ -219,20 +224,36 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
     // }
 
     // Validate OTP - CHANGED: Check database instead of memory
-    const userWithOtp = await User.findOne({ 
+    // const userWithOtp = await User.findOne({ 
+    //   email: email.toLowerCase() 
+    // }).select('+emailVerificationOtp +emailVerificationOtpExpires');
+
+    // console.log('Checking OTP for email:', email.toLowerCase()); // Debug log
+    // console.log('Submitted OTP:', otp); // Debug log
+    // console.log('Stored OTP:', userWithOtp?.emailVerificationOtp); // Debug log
+    // console.log('OTP expires:', userWithOtp?.emailVerificationOtpExpires); // Debug log
+
+    // if (!userWithOtp || 
+    //     !userWithOtp.emailVerificationOtp ||
+    //     userWithOtp.emailVerificationOtp !== otp || 
+    //     !userWithOtp.emailVerificationOtpExpires ||
+    //     userWithOtp.emailVerificationOtpExpires < new Date()) {
+    //   return res.status(400).json({ message: 'Invalid or expired OTP' });
+    // }
+
+    // Validate OTP
+    const verification = await EmailVerification.findOne({ 
       email: email.toLowerCase() 
-    }).select('+emailVerificationOtp +emailVerificationOtpExpires');
+    });
 
-    console.log('Checking OTP for email:', email.toLowerCase()); // Debug log
-    console.log('Submitted OTP:', otp); // Debug log
-    console.log('Stored OTP:', userWithOtp?.emailVerificationOtp); // Debug log
-    console.log('OTP expires:', userWithOtp?.emailVerificationOtpExpires); // Debug log
+    console.log('Checking OTP for email:', email.toLowerCase());
+    console.log('Submitted OTP:', otp);
+    console.log('Stored OTP:', verification?.otp);
+    console.log('OTP expires:', verification?.expiresAt);
 
-    if (!userWithOtp || 
-        !userWithOtp.emailVerificationOtp ||
-        userWithOtp.emailVerificationOtp !== otp || 
-        !userWithOtp.emailVerificationOtpExpires ||
-        userWithOtp.emailVerificationOtpExpires < new Date()) {
+    if (!verification || 
+        verification.otp !== otp || 
+        verification.expiresAt < new Date()) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
@@ -377,15 +398,18 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
     // delete otpStore[email.toLowerCase()];
 
     // Clear OTP after successful registration
-    await User.findOneAndUpdate(
-      { email: email.toLowerCase() },
-      {
-        $unset: {
-          emailVerificationOtp: 1,
-          emailVerificationOtpExpires: 1
-        }
-      }
-    );
+    // await User.findOneAndUpdate(
+    //   { email: email.toLowerCase() },
+    //   {
+    //     $unset: {
+    //       emailVerificationOtp: 1,
+    //       emailVerificationOtpExpires: 1
+    //     }
+    //   }
+    // );
+
+    // Clear OTP after successful registration
+    await EmailVerification.findOneAndDelete({ email: email.toLowerCase() });
 
     // Verify JWT_SECRET exists
     if (!process.env.JWT_SECRET) {
