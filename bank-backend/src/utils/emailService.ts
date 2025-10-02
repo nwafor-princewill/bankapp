@@ -81,7 +81,7 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
   try {
     const { data, error } = await resend.emails.send({
       from: 'ZenaTrust Bank <onboarding@resend.dev>',
-      to: ['amalgamateedbank@gmail.com'],
+      to: ['zenatrustbank@gmail.com'],
       subject: `New Loan Application - ${applicationId}`,
       html: htmlContent,
     });

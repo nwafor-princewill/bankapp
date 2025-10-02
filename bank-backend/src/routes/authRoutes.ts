@@ -14,14 +14,31 @@ import fs from 'fs/promises';
 const router = Router();
 
 // Set up multer for file uploads
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, 'uploads/ids'); // Folder to store ID documents
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, `${Date.now()}-${file.originalname}`); // Unique filename
+//   },
+// });
+
+// Set up multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/ids'); // Folder to store ID documents
+  destination: async (req, file, cb) => {
+    try {
+      // Ensure uploads directory exists
+      await fs.mkdir('uploads/ids', { recursive: true });
+      cb(null, 'uploads/ids');
+    } catch (err) {
+      cb(err as Error, '');
+    }
   },
   filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`); // Unique filename
+    cb(null, `${Date.now()}-${file.originalname}`);
   },
 });
+
 
 const upload = multer({
   storage,
