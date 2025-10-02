@@ -26,17 +26,40 @@ const router = Router();
 
 // Set up multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads/ids';
-    // Synchronous directory creation - simpler and more reliable
-    const fs = require('fs');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+  destination: async (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'ids');
+    
+    try {
+      // Check if path exists
+      try {
+        const stats = await fs.stat(uploadDir);
+        
+        // If it's a file (not a directory), remove it
+        if (!stats.isDirectory()) {
+          console.log('Removing file that should be a directory:', uploadDir);
+          await fs.unlink(uploadDir);
+          await fs.mkdir(uploadDir, { recursive: true });
+        }
+      } catch (err: any) {
+        // Path doesn't exist, create it
+        if (err.code === 'ENOENT') {
+          console.log('Creating upload directory:', uploadDir);
+          await fs.mkdir(uploadDir, { recursive: true });
+        } else {
+          throw err;
+        }
+      }
+      
+      cb(null, uploadDir);
+    } catch (err) {
+      console.error('Directory creation error:', err);
+      cb(err as Error, '');
     }
-    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
+    // Sanitize filename to avoid issues
+    const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+    cb(null, `${Date.now()}-${sanitizedName}`);
   },
 });
 
@@ -57,26 +80,50 @@ const upload = multer({
 const validateFileContent = async (file: Express.Multer.File): Promise<boolean> => {
   try {
     const ext = path.extname(file.originalname).toLowerCase();
+    
+    // Check if file exists
+    try {
+      await fs.access(file.path);
+    } catch {
+      throw new Error('Uploaded file not found or inaccessible');
+    }
+    
     if (['.jpg', '.jpeg', '.png'].includes(ext)) {
       // Validate image with sharp
-      const metadata = await sharp(file.path).metadata();
-      if (metadata.width < 300 || metadata.height < 300) {
-        await fs.unlink(file.path);
-        throw new Error('Image resolution too low (minimum 300x300)');
+      try {
+        const metadata = await sharp(file.path).metadata();
+        if (!metadata.width || !metadata.height) {
+          throw new Error('Invalid image file');
+        }
+        if (metadata.width < 300 || metadata.height < 300) {
+          throw new Error('Image resolution too low (minimum 300x300)');
+        }
+      } catch (sharpErr) {
+        throw new Error('Invalid or corrupted image file');
       }
       return true;
     } else if (ext === '.pdf') {
       // Validate PDF with pdf-parse
-      const data = await fs.readFile(file.path);
-      const pdfData = await pdfParse(data);
-      if (!pdfData.text.trim()) {
-        await fs.unlink(file.path);
-        throw new Error('PDF contains no readable text');
+      try {
+        const data = await fs.readFile(file.path);
+        const pdfData = await pdfParse(data);
+        if (!pdfData.text || !pdfData.text.trim()) {
+          throw new Error('PDF contains no readable text');
+        }
+      } catch (pdfErr) {
+        throw new Error('Invalid or corrupted PDF file');
       }
       return true;
     }
-    return false;
+    
+    throw new Error('Unsupported file type');
   } catch (err) {
+    // Always try to clean up the file
+    try {
+      await fs.unlink(file.path);
+    } catch (unlinkErr) {
+      console.error('Error deleting file during validation:', unlinkErr);
+    }
     throw err instanceof Error ? err : new Error('Invalid file content');
   }
 };
@@ -305,11 +352,19 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
 
     // Validate file content
     try {
-      await validateFileContent(idDocument);
-    } catch (err) {
+    await validateFileContent(idDocument);
+  } catch (err) {
+    // Ensure file is deleted even if validation fails
+    try {
       await fs.unlink(idDocument.path);
-      return res.status(400).json({ message: err instanceof Error ? err.message : 'Uploaded file is corrupted or invalid' });
+    } catch (unlinkErr) {
+      console.error('Error deleting invalid file:', unlinkErr);
     }
+    return res.status(400).json({ 
+      message: err instanceof Error ? err.message : 'Uploaded file is corrupted or invalid' 
+    });
+  }
+
 
     // ID type validation
     if (!ID_TYPES.includes(idType as any)) {

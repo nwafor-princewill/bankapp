@@ -20,6 +20,7 @@ import serviceRequestRoutes from './routes/serviceRequestRoutes';
 import accountMaintenanceRoutes from './routes/accountMaintenanceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import receiptRoutes from './routes/receiptRoutes';
+import fs from 'fs/promises';
 
 dotenv.config();
 
@@ -55,6 +56,28 @@ app.use(express.json());
 // Serve static files (profile pictures)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Add this right after your imports and before routes
+async function ensureUploadDirectories() {
+  const uploadDir = path.join(process.cwd(), 'uploads', 'ids');
+  
+  try {
+    const stats = await fs.stat(uploadDir);
+    if (!stats.isDirectory()) {
+      console.log('Removing file blocking upload directory...');
+      await fs.unlink(uploadDir);
+      await fs.mkdir(uploadDir, { recursive: true });
+      console.log('Upload directory created successfully');
+    }
+  } catch (err: any) {
+    if (err.code === 'ENOENT') {
+      await fs.mkdir(uploadDir, { recursive: true });
+      console.log('Upload directory created successfully');
+    } else {
+      console.error('Error ensuring upload directory:', err);
+    }
+  }
+}
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -72,6 +95,13 @@ app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/account-maintenance', accountMaintenanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/receipts', receiptRoutes);
+
+// Call it before starting the server
+ensureUploadDirectories().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+});
 
 // Start server
 const PORT = process.env.PORT || 5000;
