@@ -27,10 +27,24 @@ const router = Router();
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
-      // Ensure uploads directory exists
-      await fs.mkdir('uploads/ids', { recursive: true });
+      // Remove existing file if it exists and create directory
+      try {
+        const stats = await fs.stat('uploads/ids');
+        if (!stats.isDirectory()) {
+          await fs.unlink('uploads/ids');
+          await fs.mkdir('uploads/ids', { recursive: true });
+        }
+      } catch (err: any) {
+        if (err.code === 'ENOENT') {
+          // Directory doesn't exist, create it
+          await fs.mkdir('uploads/ids', { recursive: true });
+        } else {
+          throw err;
+        }
+      }
       cb(null, 'uploads/ids');
     } catch (err) {
+      console.error('Directory creation error:', err);
       cb(err as Error, '');
     }
   },
