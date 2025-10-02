@@ -25,28 +25,14 @@ const router = Router();
 
 // Set up multer for file uploads
 const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    try {
-      // Remove existing file if it exists and create directory
-      try {
-        const stats = await fs.stat('uploads/ids');
-        if (!stats.isDirectory()) {
-          await fs.unlink('uploads/ids');
-          await fs.mkdir('uploads/ids', { recursive: true });
-        }
-      } catch (err: any) {
-        if (err.code === 'ENOENT') {
-          // Directory doesn't exist, create it
-          await fs.mkdir('uploads/ids', { recursive: true });
-        } else {
-          throw err;
-        }
-      }
-      cb(null, 'uploads/ids');
-    } catch (err) {
-      console.error('Directory creation error:', err);
-      cb(err as Error, '');
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/ids';
+    // Synchronous directory creation - simpler and more reliable
+    const fs = require('fs');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
     }
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
@@ -135,7 +121,43 @@ interface SendOtpRequest {
 }
 
 // In-memory OTP store (for simplicity; use Redis or DB in production)
-const otpStore: { [email: string]: { otp: string; expires: number } } = {};
+// const otpStore: { [email: string]: { otp: string; expires: number } } = {};
+
+// @route   POST /api/auth/send-otp
+// router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Response) => {
+//   const { email, firstName } = req.body;
+
+//   try {
+//     if (!email || !firstName) {
+//       return res.status(400).json({ message: 'Email and first name are required' });
+//     }
+
+//     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//     if (!emailRegex.test(email)) {
+//       return res.status(400).json({ message: 'Please enter a valid email address' });
+//     }
+
+//     const user = await User.findOne({ email: email.toLowerCase() });
+//     if (user) {
+//       return res.status(400).json({ message: 'Email already exists' });
+//     }
+
+//     const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+//     const expires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+
+//     otpStore[email.toLowerCase()] = { otp, expires };
+
+//     const emailSent = await sendTransferOtpEmail({ email, firstName, otp }, 'signup');
+//     if (!emailSent) {
+//       throw new Error('Failed to send OTP email');
+//     }
+
+//     res.json({ message: 'OTP sent successfully' });
+//   } catch (err) {
+//     console.error('Send OTP error:', err);
+//     res.status(500).json({ message: 'Failed to send OTP' });
+//   }
+// });
 
 // @route   POST /api/auth/send-otp
 router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Response) => {
@@ -156,10 +178,21 @@ router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Respo
       return res.status(400).json({ message: 'Email already exists' });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
 
-    otpStore[email.toLowerCase()] = { otp, expires };
+    // CHANGED: Store OTP in database instead of memory
+    await User.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      {
+        emailVerificationOtp: otp,
+        emailVerificationOtpExpires: new Date(expires)
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log('OTP generated:', otp); // Debug log
+    console.log('OTP expiry:', new Date(expires)); // Debug log
 
     const emailSent = await sendTransferOtpEmail({ email, firstName, otp }, 'signup');
     if (!emailSent) {
@@ -180,8 +213,26 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
 
   try {
     // Validate OTP
-    const storedOtp = otpStore[email.toLowerCase()];
-    if (!storedOtp || storedOtp.otp !== otp || storedOtp.expires < Date.now()) {
+    // const storedOtp = otpStore[email.toLowerCase()];
+    // if (!storedOtp || storedOtp.otp !== otp || storedOtp.expires < Date.now()) {
+    //   return res.status(400).json({ message: 'Invalid or expired OTP' });
+    // }
+
+    // Validate OTP - CHANGED: Check database instead of memory
+    const userWithOtp = await User.findOne({ 
+      email: email.toLowerCase() 
+    }).select('+emailVerificationOtp +emailVerificationOtpExpires');
+
+    console.log('Checking OTP for email:', email.toLowerCase()); // Debug log
+    console.log('Submitted OTP:', otp); // Debug log
+    console.log('Stored OTP:', userWithOtp?.emailVerificationOtp); // Debug log
+    console.log('OTP expires:', userWithOtp?.emailVerificationOtpExpires); // Debug log
+
+    if (!userWithOtp || 
+        !userWithOtp.emailVerificationOtp ||
+        userWithOtp.emailVerificationOtp !== otp || 
+        !userWithOtp.emailVerificationOtpExpires ||
+        userWithOtp.emailVerificationOtpExpires < new Date()) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
@@ -323,7 +374,18 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
     await user.save();
 
     // Clear OTP after successful registration
-    delete otpStore[email.toLowerCase()];
+    // delete otpStore[email.toLowerCase()];
+
+    // Clear OTP after successful registration
+    await User.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      {
+        $unset: {
+          emailVerificationOtp: 1,
+          emailVerificationOtpExpires: 1
+        }
+      }
+    );
 
     // Verify JWT_SECRET exists
     if (!process.env.JWT_SECRET) {

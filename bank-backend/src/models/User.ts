@@ -73,6 +73,8 @@ export interface IUser extends Document {
   notificationPreferences?: INotificationPreferences; 
   idType?: IdType; // NEW: ID type
   idDocumentPath?: string; // NEW: Path to uploaded ID document
+  emailVerificationOtp?: string;
+  emailVerificationOtpExpires?: Date;
   matchPassword(enteredPassword: string): Promise<boolean>;
 }
 
@@ -196,6 +198,14 @@ const userSchema = new mongoose.Schema<IUser>({
   },
   idDocumentPath: { // NEW: Path to uploaded ID document
     type: String,
+  },
+  emailVerificationOtp: {
+  type: String,
+  select: false
+},
+  emailVerificationOtpExpires: {
+    type: Date,
+    select: false
   },
 }, {
   timestamps: true
