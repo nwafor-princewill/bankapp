@@ -1,3 +1,5 @@
+import { Resend } from 'resend';
+
 interface LoanApplicationData {
   userInfo: {
     firstName: string;
@@ -21,33 +23,8 @@ interface OtpDetails {
   firstName: string;
 }
 
-const sendBrevoEmail = async (emailData: any) => {
-  if (!process.env.BREVO_API_KEY) {
-    throw new Error('Missing Brevo API key in environment variables');
-  }
-
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'api-key': process.env.BREVO_API_KEY
-    },
-    body: JSON.stringify(emailData)
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Brevo API Error:', {
-      status: response.status,
-      statusText: response.statusText,
-      body: errorText
-    });
-    throw new Error(`Failed to send email: ${response.status} ${response.statusText}`);
-  }
-
-  return await response.json();
-};
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const sendLoanApplicationEmail = async (applicationData: LoanApplicationData) => {
   const { userInfo, loanDetails, applicationId } = applicationData;
@@ -101,24 +78,20 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
     </html>
   `;
 
-  const emailData = {
-    sender: {
-      name: 'ZenaTrust Bank',
-      email: process.env.EMAIL_FROM
-    },
-    to: [
-      {
-        email: 'amalgamateedbank@gmail.com',
-        name: 'ZenaTrust Loan Department'
-      }
-    ],
-    subject: `New Loan Application - ${applicationId}`,
-    htmlContent: htmlContent
-  };
-
   try {
-    await sendBrevoEmail(emailData);
-    console.log('Loan application email sent successfully to:', emailData.to[0].email);
+    const { data, error } = await resend.emails.send({
+      from: 'ZenaTrust Bank <onboarding@resend.dev>',
+      to: ['amalgamateedbank@gmail.com'],
+      subject: `New Loan Application - ${applicationId}`,
+      html: htmlContent,
+    });
+
+    if (error) {
+      console.error('Resend error:', error);
+      throw error;
+    }
+
+    console.log('Loan application email sent successfully. ID:', data?.id);
     return true;
   } catch (error) {
     console.error('Error sending loan application email:', error);
@@ -167,28 +140,23 @@ export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transf
     </html>
   `;
 
-  const emailData = {
-    sender: {
-      name: 'ZenaTrust Bank',
-      email: process.env.EMAIL_FROM
-    },
-    to: [
-      {
-        email: email,
-        name: firstName
-      }
-    ],
-    subject: subject,
-    htmlContent: htmlContent
-  };
-
   try {
-    await sendBrevoEmail(emailData);
-    console.log(`${context === 'signup' ? 'Signup' : 'Transfer'} OTP email sent successfully to:`, email);
+    const { data, error } = await resend.emails.send({
+      from: 'ZenaTrust Bank <onboarding@resend.dev>',
+      to: [email],
+      subject: subject,
+      html: htmlContent,
+    });
+
+    if (error) {
+      console.error('Resend error:', error);
+      throw error;
+    }
+
+    console.log(`${context === 'signup' ? 'Signup' : 'Transfer'} OTP email sent successfully to:`, email, 'ID:', data?.id);
     return true;
   } catch (error) {
     console.error('Error sending OTP email:', error);
-    console.error('Email data:', JSON.stringify(emailData, null, 2));
     throw error;
   }
 };
@@ -198,23 +166,20 @@ export const sendEmail = async (options: {
   subject: string;
   text: string;
 }) => {
-  const emailData = {
-    sender: {
-      name: 'ZenaTrust Bank',
-      email: process.env.EMAIL_FROM
-    },
-    to: [
-      {
-        email: options.to
-      }
-    ],
-    subject: options.subject,
-    textContent: options.text
-  };
-
   try {
-    await sendBrevoEmail(emailData);
-    console.log('Email sent successfully to:', options.to);
+    const { data, error } = await resend.emails.send({
+      from: 'ZenaTrust Bank <onboarding@resend.dev>',
+      to: [options.to],
+      subject: options.subject,
+      text: options.text,
+    });
+
+    if (error) {
+      console.error('Resend error:', error);
+      return { success: false, error };
+    }
+
+    console.log('Email sent successfully to:', options.to, 'ID:', data?.id);
     return { success: true };
   } catch (error) {
     console.error('Error sending email:', error);
