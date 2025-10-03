@@ -3,7 +3,6 @@ import cors from 'cors';
 import path from 'path';
 import connectDB from './db/connection';
 import authRoutes from './routes/authRoutes';
-import dotenv from 'dotenv';
 import userRoutes from './routes/userRoutes';
 import cryptoRoutes from './routes/cryptoRoutes';
 import { startBlockchainListener } from './services/blockchainListener';
@@ -21,6 +20,7 @@ import accountMaintenanceRoutes from './routes/accountMaintenanceRoutes';
 import adminRoutes from './routes/adminRoutes';
 import receiptRoutes from './routes/receiptRoutes';
 import fs from 'fs/promises';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -77,32 +77,32 @@ async function ensureUploadDirectories() {
   }
 }
 
-// Register routes with error handling
+// Register routes with detailed error handling
 const routes = [
-  { path: '/api/auth', router: authRoutes },
-  { path: '/api/users', router: userRoutes },
-  { path: '/api/crypto', router: cryptoRoutes },
-  { path: '/api/transactions', router: transactionRoutes },
-  { path: '/api/accounts', router: accountRoutes },
-  { path: '/api/transfers', router: transferRoutes },
-  { path: '/api/bill-payments', router: billPaymentRoutes },
-  { path: '/api/cards', router: cardRoutes },
-  { path: '/api/redeem', router: redeemRoutes },
-  { path: '/api/settings', router: settingsRoutes },
-  { path: '/api/beneficiaries', router: beneficiaryRoutes },
-  { path: '/api/loans', router: loanRoutes },
-  { path: '/api/service-requests', router: serviceRequestRoutes },
-  { path: '/api/account-maintenance', router: accountMaintenanceRoutes },
-  { path: '/api/admin', router: adminRoutes },
-  { path: '/api/receipts', router: receiptRoutes },
+  { path: '/api/auth', router: authRoutes, name: 'authRoutes' },
+  { path: '/api/users', router: userRoutes, name: 'userRoutes' },
+  { path: '/api/crypto', router: cryptoRoutes, name: 'cryptoRoutes' },
+  { path: '/api/transactions', router: transactionRoutes, name: 'transactionRoutes' },
+  { path: '/api/accounts', router: accountRoutes, name: 'accountRoutes' },
+  { path: '/api/transfers', router: transferRoutes, name: 'transferRoutes' },
+  { path: '/api/bill-payments', router: billPaymentRoutes, name: 'billPaymentRoutes' },
+  { path: '/api/cards', router: cardRoutes, name: 'cardRoutes' },
+  { path: '/api/redeem', router: redeemRoutes, name: 'redeemRoutes' },
+  { path: '/api/settings', router: settingsRoutes, name: 'settingsRoutes' },
+  { path: '/api/beneficiaries', router: beneficiaryRoutes, name: 'beneficiaryRoutes' },
+  { path: '/api/loans', router: loanRoutes, name: 'loansRoutes' },
+  { path: '/api/service-requests', router: serviceRequestRoutes, name: 'serviceRequestRoutes' },
+  { path: '/api/account-maintenance', router: accountMaintenanceRoutes, name: 'accountMaintenanceRoutes' },
+  { path: '/api/admin', router: adminRoutes, name: 'adminRoutes' },
+  { path: '/api/receipts', router: receiptRoutes, name: 'receiptRoutes' },
 ];
 
-routes.forEach(({ path, router }) => {
+routes.forEach(({ path, router, name }) => {
   try {
     app.use(path, router);
-    console.log(`Registered route: ${path}`);
+    console.log(`Successfully registered route: ${name} at ${path}`);
   } catch (err) {
-    console.error(`Error registering route ${path}:`, err);
+    console.error(`Error registering route ${name} at ${path}:`, err);
   }
 });
 
