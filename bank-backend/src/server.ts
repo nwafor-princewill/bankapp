@@ -28,9 +28,7 @@ const app = express();
 
 // CORS Configuration
 const allowedOrigins = [
-  // 'https://www.amalgamateed.com',
   'https://www.zenatrust.com',
-  // 'https://amalgamateed.com',
   'https://zenatrust.com',
   'https://bank-dis.vercel.app',
   'http://localhost:3000'
@@ -38,28 +36,32 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    // Allow requests with no origin (e.g., server-to-server) or from allowed origins
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.error(`CORS blocked for origin: ${origin}`);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'], // Explicitly allow headers used in requests
+  exposedHeaders: ['Content-Length', 'X-Kuma-Revision'], // Optional: expose specific headers
 }));
+
+// Explicitly handle OPTIONS requests for all routes
+app.options('*', cors()); // Ensure preflight requests are handled for all routes
 
 // Middleware
 app.use(express.json());
 
 // Serve static files (profile pictures)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'Uploads')));
 
-// Add this right after your imports and before routes
+// Ensure upload directories
 async function ensureUploadDirectories() {
   const uploadDir = path.join(process.cwd(), 'uploads', 'ids');
-  
   try {
     const stats = await fs.stat(uploadDir);
     if (!stats.isDirectory()) {
@@ -96,19 +98,19 @@ app.use('/api/account-maintenance', accountMaintenanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/receipts', receiptRoutes);
 
-// Call it before starting the server
-ensureUploadDirectories().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK' });
 });
 
 // Start server
 const PORT = process.env.PORT || 5000;
 
 connectDB().then(() => {
-  startBlockchainListener();
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  ensureUploadDirectories().then(() => {
+    startBlockchainListener();
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
   });
 });
