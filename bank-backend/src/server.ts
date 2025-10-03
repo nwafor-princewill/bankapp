@@ -36,7 +36,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (e.g., server-to-server) or from allowed origins
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -46,22 +45,20 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'], // Explicitly allow headers used in requests
-  exposedHeaders: ['Content-Length', 'X-Kuma-Revision'], // Optional: expose specific headers
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Explicitly handle OPTIONS requests for all routes
-app.options('*', cors()); // Ensure preflight requests are handled for all routes
+app.options('*', cors());
 
 // Middleware
 app.use(express.json());
 
-// Serve static files (profile pictures)
+// Serve static files
 app.use('/uploads', express.static(path.join(__dirname, 'Uploads')));
 
 // Ensure upload directories
 async function ensureUploadDirectories() {
-  const uploadDir = path.join(process.cwd(), 'uploads', 'ids');
+  const uploadDir = path.join(process.cwd(), 'Uploads', 'ids');
   try {
     const stats = await fs.stat(uploadDir);
     if (!stats.isDirectory()) {
@@ -80,23 +77,34 @@ async function ensureUploadDirectories() {
   }
 }
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/crypto', cryptoRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/accounts', accountRoutes);
-app.use('/api/transfers', transferRoutes);
-app.use('/api/bill-payments', billPaymentRoutes);
-app.use('/api/cards', cardRoutes);
-app.use('/api/redeem', redeemRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/beneficiaries', beneficiaryRoutes);
-app.use('/api/loans', loanRoutes);
-app.use('/api/service-requests', serviceRequestRoutes);
-app.use('/api/account-maintenance', accountMaintenanceRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/receipts', receiptRoutes);
+// Register routes with error handling
+const routes = [
+  { path: '/api/auth', router: authRoutes },
+  { path: '/api/users', router: userRoutes },
+  { path: '/api/crypto', router: cryptoRoutes },
+  { path: '/api/transactions', router: transactionRoutes },
+  { path: '/api/accounts', router: accountRoutes },
+  { path: '/api/transfers', router: transferRoutes },
+  { path: '/api/bill-payments', router: billPaymentRoutes },
+  { path: '/api/cards', router: cardRoutes },
+  { path: '/api/redeem', router: redeemRoutes },
+  { path: '/api/settings', router: settingsRoutes },
+  { path: '/api/beneficiaries', router: beneficiaryRoutes },
+  { path: '/api/loans', router: loanRoutes },
+  { path: '/api/service-requests', router: serviceRequestRoutes },
+  { path: '/api/account-maintenance', router: accountMaintenanceRoutes },
+  { path: '/api/admin', router: adminRoutes },
+  { path: '/api/receipts', router: receiptRoutes },
+];
+
+routes.forEach(({ path, router }) => {
+  try {
+    app.use(path, router);
+    console.log(`Registered route: ${path}`);
+  } catch (err) {
+    console.error(`Error registering route ${path}:`, err);
+  }
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -113,4 +121,7 @@ connectDB().then(() => {
       console.log(`Server running on port ${PORT}`);
     });
   });
+}).catch(err => {
+  console.error('Failed to connect to MongoDB:', err);
+  process.exit(1);
 });
