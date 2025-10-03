@@ -385,19 +385,35 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
     }
 
     // Security questions validation
-    if (!securityQuestions ||
-        !Array.isArray(securityQuestions) ||
-        securityQuestions.length < 1 ||
-        !securityQuestions[0]?.question?.trim() ||
-        !securityQuestions[0]?.answer?.trim()) {
+    // if (!securityQuestions ||
+    //     !Array.isArray(securityQuestions) ||
+    //     securityQuestions.length < 1 ||
+    //     !securityQuestions[0]?.question?.trim() ||
+    //     !securityQuestions[0]?.answer?.trim()) {
+    //   return res.status(400).json({
+    //     message: 'At least one complete security question with answer is required'
+    //   });
+    // }
+
+    // Security questions validation - use the PARSED version
+    if (!parsedSecurityQuestions ||
+        !Array.isArray(parsedSecurityQuestions) ||
+        parsedSecurityQuestions.length < 1 ||
+        !parsedSecurityQuestions[0]?.question?.trim() ||
+        !parsedSecurityQuestions[0]?.answer?.trim()) {
       return res.status(400).json({
         message: 'At least one complete security question with answer is required'
       });
     }
 
     // Check for duplicate security questions
-    const duplicateQuestions = securityQuestions.filter((q, index) =>
-      q.question && securityQuestions.findIndex(item => item.question === q.question) !== index
+    // const duplicateQuestions = securityQuestions.filter((q, index) =>
+    //   q.question && securityQuestions.findIndex(item => item.question === q.question) !== index
+    // );
+
+    // Check for duplicate security questions - use the PARSED version
+    const duplicateQuestions = parsedSecurityQuestions.filter((q, index) =>
+      q.question && parsedSecurityQuestions.findIndex(item => item.question === q.question) !== index
     );
 
     if (duplicateQuestions.length > 0) {
@@ -432,7 +448,11 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
       state: state.trim(),
       address: address.trim(),
       phone: phone.trim(),
-      securityQuestions: securityQuestions.map(q => ({
+      // securityQuestions: securityQuestions.map(q => ({
+      //   question: q.question.trim(),
+      //   answer: q.answer.trim()
+      // })),
+      securityQuestions: parsedSecurityQuestions.map(q => ({
         question: q.question.trim(),
         answer: q.answer.trim()
       })),
