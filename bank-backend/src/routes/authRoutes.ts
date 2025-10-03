@@ -260,33 +260,30 @@ router.post('/send-otp', async (req: Request<{}, {}, SendOtpRequest>, res: Respo
 
 // @route   POST /api/auth/register
 router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
+  console.log('=== Registration Request Received ===');
+  console.log('Body fields:', Object.keys(req.body));
+  console.log('File received:', req.file ? {
+    fieldname: req.file.fieldname,
+    originalname: req.file.originalname,
+    mimetype: req.file.mimetype,
+    size: req.file.size
+  } : 'NO FILE');
+  console.log('===================================');
+
   const { firstName, lastName, email, password, confirmPassword, gender, dateOfBirth, country, state, address, phone, securityQuestions, currency, otp, idType } = req.body;
-  const idDocument = req.file; // Uploaded file from multer
+  const idDocument = req.file;
 
   try {
-    // Validate OTP
-    // const storedOtp = otpStore[email.toLowerCase()];
-    // if (!storedOtp || storedOtp.otp !== otp || storedOtp.expires < Date.now()) {
-    //   return res.status(400).json({ message: 'Invalid or expired OTP' });
-    // }
-
-    // Validate OTP - CHANGED: Check database instead of memory
-    // const userWithOtp = await User.findOne({ 
-    //   email: email.toLowerCase() 
-    // }).select('+emailVerificationOtp +emailVerificationOtpExpires');
-
-    // console.log('Checking OTP for email:', email.toLowerCase()); // Debug log
-    // console.log('Submitted OTP:', otp); // Debug log
-    // console.log('Stored OTP:', userWithOtp?.emailVerificationOtp); // Debug log
-    // console.log('OTP expires:', userWithOtp?.emailVerificationOtpExpires); // Debug log
-
-    // if (!userWithOtp || 
-    //     !userWithOtp.emailVerificationOtp ||
-    //     userWithOtp.emailVerificationOtp !== otp || 
-    //     !userWithOtp.emailVerificationOtpExpires ||
-    //     userWithOtp.emailVerificationOtpExpires < new Date()) {
-    //   return res.status(400).json({ message: 'Invalid or expired OTP' });
-    // }
+    // Parse securityQuestions if it's a string
+    let parsedSecurityQuestions = securityQuestions;
+    if (typeof securityQuestions === 'string') {
+      try {
+        parsedSecurityQuestions = JSON.parse(securityQuestions);
+      } catch (parseErr) {
+        console.error('Error parsing security questions:', parseErr);
+        return res.status(400).json({ message: 'Invalid security questions format' });
+      }
+    }
 
     // Validate OTP
     const verification = await EmailVerification.findOne({ 
@@ -296,7 +293,6 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
     console.log('Checking OTP for email:', email.toLowerCase());
     console.log('Submitted OTP:', otp);
     console.log('Stored OTP:', verification?.otp);
-    console.log('OTP expires:', verification?.expiresAt);
 
     if (!verification || 
         verification.otp !== otp || 
@@ -319,8 +315,7 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
       phone: 'Phone number',
       currency: 'Currency',
       otp: 'OTP',
-      idType: 'ID type',
-      idDocument: 'ID document'
+      idType: 'ID type'
     };
 
     // Check for missing required fields
@@ -332,6 +327,7 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
     }
 
     if (!idDocument) {
+      console.error('No ID document file received');
       missingFields.push('ID document');
     }
 
@@ -340,6 +336,9 @@ router.post('/register', upload.single('idDocument'), async (req: Request<{}, {}
         message: `The following fields are required: ${missingFields.join(', ')}`
       });
     }
+
+    // Rest of your validation code...
+    // (continue with the existing validation)
 
     // Check for empty or too small file
     if (!idDocument || idDocument.size === 0) {
