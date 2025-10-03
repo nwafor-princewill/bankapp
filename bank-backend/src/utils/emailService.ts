@@ -80,7 +80,7 @@ export const sendLoanApplicationEmail = async (applicationData: LoanApplicationD
 
   try {
     const { data, error } = await resend.emails.send({
-      from: 'ZenaTrust Bank <onboarding@resend.dev>',
+      from: 'ZenaTrust Bank <noreply@zenatrust.com>',
       to: ['zenatrustbank@gmail.com'],
       subject: `New Loan Application - ${applicationId}`,
       html: htmlContent,
@@ -142,7 +142,7 @@ export const sendTransferOtpEmail = async (details: OtpDetails, context: 'transf
 
   try {
     const { data, error } = await resend.emails.send({
-      from: 'ZenaTrust Bank <onboarding@resend.dev>',
+      from: 'ZenaTrust Bank <noreply@zenatrust.com>',
       to: [email],
       subject: subject,
       html: htmlContent,
@@ -168,7 +168,7 @@ export const sendEmail = async (options: {
 }) => {
   try {
     const { data, error } = await resend.emails.send({
-      from: 'ZenaTrust Bank <onboarding@resend.dev>',
+      from: 'ZenaTrust Bank <noreply@zenatrust.com>',
       to: [options.to],
       subject: options.subject,
       text: options.text,
